@@ -1,0 +1,43 @@
+import type { ConstructionPreset } from '../core/models/construction';
+
+export const DEFAULT_CONSTRUCTIONS: ConstructionPreset[] = [
+  {
+    id: 'const-standard',
+    name: 'Standart - Yanlar Dışta, Kanallı 8mm',
+    assemblyType: 'sides_out',
+    backType: 'routed',
+    bodyThickness: 18,
+    backThickness: 8,
+    backChannelInset: 10,
+    backChannelDepth: 9,
+    jointType: 'confirmat',
+    doorGap: 3,
+    doorOverlayType: 'full',
+  },
+  {
+    id: 'const-nailed-back',
+    name: 'Çakma Arkalık - Yanlar Dışta',
+    assemblyType: 'sides_out',
+    backType: 'nailed',
+    bodyThickness: 18,
+    backThickness: 3,
+    backChannelInset: 0,
+    backChannelDepth: 0,
+    jointType: 'confirmat',
+    doorGap: 3,
+    doorOverlayType: 'full',
+  },
+  {
+    id: 'const-sides-in',
+    name: 'Yanlar İçte, Kanallı 8mm',
+    assemblyType: 'sides_in',
+    backType: 'routed',
+    bodyThickness: 18,
+    backThickness: 8,
+    backChannelInset: 10,
+    backChannelDepth: 9,
+    jointType: 'confirmat',
+    doorGap: 3,
+    doorOverlayType: 'full',
+  },
+];

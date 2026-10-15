@@ -1,0 +1,102 @@
+{
+  "name": "dolap",
+  "productName": "Dolap",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Mobilya ölçü çıkarma, kesim listesi, plaka planı ve teklif hazırlama",
+  "author": "Dolap",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "app": "npm run build && npm run electron:install && electron .",
+    "icons": "node scripts/make-icons.cjs",
+    "dist": "npm run test && npm run build && npm run electron:install && electron-builder --win --x64",
+    "electron:install": "node node_modules/electron/install.js"
+  },
+  "build": {
+    "appId": "com.dolap.desktop",
+    "productName": "Dolap",
+    "electronDist": "node_modules/electron/dist",
+    "copyright": "Dolap",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Dolap",
+      "installerLanguages": [
+        "tr_TR"
+      ],
+      "language": "1055",
+      "artifactName": "Dolap-Kurulum-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Dolap-Tasinabilir-${version}.${ext}"
+    }
+  },
+  "devDependencies": {
+    "@react-three/drei": "^10.7.8",
+    "@react-three/fiber": "^9.7.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/coverage-v8": "^5.0.1",
+    "dejavu-fonts-ttf": "^2.37.3",
+    "dexie": "^4.4.6",
+    "electron": "^44.7.2",
+    "electron-builder": "^26.15.3",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "lucide-react": "^1.47.0",
+    "oxlint": "^1.81.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "sharp": "^0.35.5",
+    "tailwindcss": "^4.3.3",
+    "three": "^0.186.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1",
+    "xlsx": "^0.18.5",
+    "zustand": "^5.0.15"
+  }
+}

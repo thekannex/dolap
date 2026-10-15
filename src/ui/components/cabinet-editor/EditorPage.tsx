@@ -1,0 +1,98 @@
+import { Copy, Trash2, PenTool } from 'lucide-react';
+import { useProjectStore, useActiveCabinet } from '../../../stores/project-store';
+import { useUIStore } from '../../../stores/ui-store';
+import { useCabinetCalculations } from '../../hooks/use-cabinet-calculations';
+import CabinetParams from './CabinetParams';
+import CabinetPreview from './CabinetPreview';
+import { PartsList, WarningsPanel, TipsPanel } from './DetailPanels';
+import AddCabinetMenu from '../shared/AddCabinetMenu';
+import { CABINET_TYPE_ICONS } from '../shared/cabinet-icons';
+import { Button, EmptyState } from '../shared/ui';
+import type { ProjectCabinet } from '../../../core/models/cabinet';
+
+function CabinetList({ activeId }: { activeId: string | undefined }) {
+  const cabinets = useProjectStore((s) => s.project?.cabinets ?? []);
+  const setActiveCabinet = useProjectStore((s) => s.setActiveCabinet);
+  const addCabinet = useProjectStore((s) => s.addCabinet);
+
+  return (
+    <nav aria-label="Dolaplar" className="w-52 shrink-0 h-full overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-bg)] flex flex-col">
+      <div className="p-2 border-b border-[var(--color-border)] flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] pl-1">Dolaplar</span>
+        <AddCabinetMenu label="Ekle" onAdd={(t) => addCabinet(t)} />
+      </div>
+      <ul className="p-1.5 flex flex-col gap-0.5">
+        {cabinets.map((c) => {
+          const Icon = CABINET_TYPE_ICONS[c.type];
+          const active = c.id === activeId;
+          return (
+            <li key={c.id}>
+              <button onClick={() => setActiveCabinet(c.id)} aria-current={active}
+                className={`w-full text-left flex items-start gap-2 px-2 py-1.5 rounded-md text-xs transition-colors ${
+                  active ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]' : 'text-[var(--color-text)] hover:bg-[var(--color-bg-hover)]/60'
+                }`}>
+                <Icon size={14} className="mt-0.5 shrink-0 opacity-70" />
+                <span className="min-w-0">
+                  <span className="font-mono font-semibold">{c.code}</span>
+                  {c.quantity > 1 && <span className="ml-1 opacity-70">×{c.quantity}</span>}
+                  <span className="block truncate opacity-80">{c.name}</span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+function EditorWorkspace({ cabinet }: { cabinet: ProjectCabinet }) {
+  const computed = useCabinetCalculations(cabinet);
+  const duplicateCabinet = useProjectStore((s) => s.duplicateCabinet);
+  const removeCabinet = useProjectStore((s) => s.removeCabinet);
+  const confirm = useUIStore((s) => s.confirm);
+
+  return (
+    <>
+      <CabinetParams cabinet={cabinet} />
+      <CabinetPreview cabinet={cabinet} computed={computed} />
+      <aside className="w-[340px] shrink-0 h-full overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-bg-card)] p-4">
+        <div className="flex items-center justify-between mb-3 gap-2">
+          <span className="text-xs text-[var(--color-text-muted)] font-mono truncate">
+            {cabinet.code} · {computed.parts.reduce((s, p) => s + p.quantity, 0)} parça
+          </span>
+          <div className="flex gap-1">
+            <Button size="sm" variant="ghost" onClick={() => duplicateCabinet(cabinet.id)} title="Bu dolabı çoğalt"><Copy size={13} /> Çoğalt</Button>
+            <Button size="sm" variant="danger" aria-label="Dolabı sil" title="Dolabı sil" onClick={async () => {
+              if (await confirm({ title: 'Dolap silinsin mi?', message: `${cabinet.code} · ${cabinet.name} projeden çıkarılacak.`, confirmLabel: 'Sil', danger: true })) {
+                removeCabinet(cabinet.id);
+              }
+            }}><Trash2 size={13} /></Button>
+          </div>
+        </div>
+        <WarningsPanel computed={computed} />
+        <PartsList computed={computed} />
+        <TipsPanel cabinet={cabinet} />
+      </aside>
+    </>
+  );
+}
+
+export default function EditorPage() {
+  const cabinet = useActiveCabinet();
+  const hasAny = useProjectStore((s) => (s.project?.cabinets.length ?? 0) > 0);
+  const addCabinet = useProjectStore((s) => s.addCabinet);
+
+  return (
+    <div className="flex-1 flex overflow-hidden">
+      <CabinetList activeId={cabinet?.id} />
+      {cabinet && hasAny ? (
+        <EditorWorkspace key={cabinet.id} cabinet={cabinet} />
+      ) : (
+        <EmptyState icon={<PenTool size={32} />} title="Projede dolap yok"
+          text="Duvar Yerleşimi sayfasından otomatik yerleşim yapabilir ya da buradan tek tek dolap ekleyebilirsiniz."
+          action={<AddCabinetMenu onAdd={(t) => addCabinet(t)} />} />
+      )}
+    </div>
+  );
+}
