@@ -1,7 +1,11 @@
 import type { AssemblyType, BackType, DoorOverlayType } from './construction';
 import type { RailType } from './hardware';
 
-export type CabinetType = 'base' | 'wall' | 'tall' | 'drawer_base' | 'sink' | 'open_shelf' | 'filler';
+export type CabinetType =
+  // Mutfak
+  | 'base' | 'wall' | 'tall' | 'drawer_base' | 'sink' | 'open_shelf' | 'filler'
+  // Bağımsız mobilya
+  | 'wardrobe' | 'bookcase' | 'shoe_cabinet' | 'dresser' | 'tv_unit' | 'custom';
 
 /** Duvar üzerindeki sıra: alt dolaplar, üst dolaplar veya boy dolaplar. */
 export type CabinetRow = 'base' | 'wall' | 'tall';
@@ -38,6 +42,83 @@ export interface CabinetState {
   isOpenShelf: boolean;
   railWidth: number;
   doorHingeSide: 'left' | 'right' | 'both';
+  /** Kapağın açılış yönü: yana (menteşe yan kenarda) ya da yukarı (kalkar/katlanır kapak). */
+  doorOpening: 'side' | 'up';
+  /** Baza (süpürgelik) yüksekliği, mm. 0 = baza yok (mutfakta ayak kullanılır). */
+  plinthHeight: number;
+  /** Elbise askı borusu sayısı. */
+  hangerRodCount: number;
+  /** Dolabın üstündeki evye; yoksa null. */
+  sink: SinkSpec | null;
+  /** Bölmeli iç düzen; null ise kapak/çekmece/raf ayarları tüm dolaba uygulanır. */
+  interior: CabinetInterior | null;
+  /** Ayak yüksekliği (mm, toplam yüksekliğe dahil). 0 = ayaksız. */
+  legHeight: number;
+  /** Üst tabla dikmelerin arasında mı, üstünde mi (tam en). Yoksa montaj tipinden çıkarılır. */
+  topJoint?: 'between' | 'over';
+  /** Alt tabla dikmelerin arasında mı, altında mı (tam en). */
+  bottomJoint?: 'between' | 'over';
+  /** Sol yan dikme kapağın arkasında: kapak dikmenin önünü de örter (gömme kapakta dikme geri çekilir). */
+  leftSideBehind?: boolean;
+  /** Sağ yan dikme kapağın arkasında. */
+  rightSideBehind?: boolean;
+}
+
+export type CellContent = 'door' | 'drawer' | 'open';
+
+/** Bölmedeki bir hücre (alttan üste sıralı). */
+export interface InteriorCell {
+  id: string;
+  /** Net iç yükseklik (mm). Sütunun en üst hücresi kalan yüksekliği alır. */
+  height: number;
+  content: CellContent;
+  doorCount: 1 | 2;
+  hinge: 'left' | 'right';
+  opening: 'side' | 'up';
+  drawerCount: number;
+  /** Rafların hücre tabanından yüksekliği (mm, rafın alt yüzü). */
+  shelves: number[];
+  shelfType: 'adjustable' | 'fixed';
+  rod: boolean;
+}
+
+/** Dikey bölme (soldan sağa). */
+export interface InteriorColumn {
+  id: string;
+  /** Net iç genişlik (mm). En sağdaki sütun kalan genişliği alır. */
+  width: number;
+  cells: InteriorCell[];
+  /** Sağındaki ara dikme kapağın arkasında: 'left' bu bölmenin kapağı örter, 'right' sağdaki bölmeninki. */
+  dividerBehind?: 'left' | 'right' | null;
+  /** Eşit tutulan bölme grubu; aynı gruptaki yan yana bölmeler hep eşit genişliktedir. */
+  group?: string | null;
+}
+
+export interface CabinetInterior {
+  columns: InteriorColumn[];
+}
+
+/** Evye tanımı: ölçüler, tezgâhtaki konum ve batarya yeri (mm). */
+export interface SinkSpec {
+  /** Hazır model kimliği ya da 'custom'. */
+  presetId: string;
+  /** ankastre (tezgâhın üstüne oturur) ya da tezgâh altı. */
+  mount: 'inset' | 'undermount';
+  outerWidth: number;
+  outerDepth: number;
+  cutoutWidth: number;
+  cutoutDepth: number;
+  bowlCount: 1 | 2;
+  /** Çanak(lar)ın toplam genişliği; dolabın içine sığması gereken kısım. */
+  bowlWidth: number;
+  drainer: 'none' | 'left' | 'right';
+  /** Evye sol kenarının dolap sol kenarına uzaklığı; null = çanak dolabın ortasında. */
+  offsetX: number | null;
+  /** Tezgâh ön kenarından evye ön kenarına. */
+  frontGap: number;
+  faucet: 'sink' | 'countertop' | 'none';
+  /** Batarya tezgâhtaysa evye arka kenarından batarya merkezine. */
+  faucetBackGap: number;
 }
 
 /** Projeye kayıtlı dolap: hesap parametreleri + duvardaki yeri. */
@@ -49,4 +130,12 @@ export interface ProjectCabinet extends CabinetState {
   x: number | null;
   quantity: number;
   notes: string;
+  /** Serbest çizim kompozisyonu; null ise kompozisyona ait değil. */
+  groupId: string | null;
+  /** Kompozisyonda yerden yükseklik (mm). Kompozisyonda x da kompozisyonun solundan ölçülür. */
+  elevation: number | null;
+  /** Sol dikme soldaki kutuyla ortak (bu kutunun sol dikmesi kesilmez). */
+  shareLeft: boolean;
+  /** Alt tabla alttaki kutunun üst tablasıyla ortak (bu kutunun tabanı kesilmez). */
+  shareBottom: boolean;
 }

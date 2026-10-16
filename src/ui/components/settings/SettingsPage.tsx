@@ -20,6 +20,9 @@ const HARDWARE_LABELS: Record<HardwareKey, string> = {
   shelf_pin: 'Raf pimi (adet)',
   leg: 'Dolap ayağı (adet)',
   handle: 'Kulp (adet)',
+  gas_strut: 'Kapak amortisörü / piston (adet)',
+  lift_system: 'Katlanır kapak mekanizması (takım)',
+  hanger_rod: 'Askı borusu, taşıyıcılı (adet)',
 };
 
 export default function SettingsPage() {

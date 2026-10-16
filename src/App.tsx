@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FolderOpen, MapPin, PenTool, Table2, Box, Settings, Check, Loader2, AlertCircle } from 'lucide-react';
+import { FolderOpen, MapPin, PenTool, Table2, Box, Settings, Check, Loader2, AlertCircle, Shapes } from 'lucide-react';
 import { useUIStore } from './stores/ui-store';
 import type { PageId } from './stores/ui-store';
 import { useProjectStore } from './stores/project-store';
@@ -11,11 +11,13 @@ import EditorPage from './ui/components/cabinet-editor/EditorPage';
 import CutListPage from './ui/components/cut-list/CutListPage';
 import Cabinet3DView from './ui/components/cabinet-3d/Cabinet3DView';
 import SettingsPage from './ui/components/settings/SettingsPage';
+import ComposerPage from './ui/components/composer/ComposerPage';
 import { Toasts, ConfirmDialog, ErrorBoundary } from './ui/components/shared/Overlays';
 
 const PAGES: Array<{ id: PageId; label: string; icon: typeof FolderOpen; needsProject: boolean }> = [
   { id: 'project', label: 'Proje', icon: FolderOpen, needsProject: false },
   { id: 'wall-layout', label: 'Duvar Yerleşimi', icon: MapPin, needsProject: true },
+  { id: 'composer', label: 'Serbest Çizim', icon: Shapes, needsProject: true },
   { id: 'editor', label: 'Dolaplar', icon: PenTool, needsProject: true },
   { id: 'cut-list', label: 'Kesim ve Teklif', icon: Table2, needsProject: true },
   { id: '3d-preview', label: '3D', icon: Box, needsProject: true },
@@ -99,6 +101,7 @@ export default function App() {
           <ErrorBoundary key={page}>
             {page === 'project' && <ProjectPage />}
             {page === 'wall-layout' && <WallLayoutPage />}
+            {page === 'composer' && <ComposerPage />}
             {page === 'editor' && <EditorPage />}
             {page === 'cut-list' && <CutListPage />}
             {page === '3d-preview' && <Cabinet3DView />}

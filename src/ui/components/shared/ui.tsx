@@ -60,8 +60,8 @@ export function NumInput({ label, value, onChange, min = 0, max = 100000, step =
   );
 }
 
-export function TextInput({ label, value, onChange, placeholder, multiline }: {
-  label: string; value: string; onChange: (v: string) => void; placeholder?: string; multiline?: boolean;
+export function TextInput({ label, value, onChange, placeholder, multiline, autoFocus }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; multiline?: boolean; autoFocus?: boolean;
 }) {
   return (
     <label className="flex flex-col gap-1 min-w-0">
@@ -69,7 +69,7 @@ export function TextInput({ label, value, onChange, placeholder, multiline }: {
       {multiline ? (
         <textarea value={value} placeholder={placeholder} rows={3} onChange={(e) => onChange(e.target.value)} className={`${inputCls} resize-y`} />
       ) : (
-        <input value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} className={inputCls} />
+        <input value={value} placeholder={placeholder} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value)} className={inputCls} />
       )}
     </label>
   );

@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import type { CellRef } from '../interior/InteriorSvg';
 import { Copy, Trash2, PenTool } from 'lucide-react';
 import { useProjectStore, useActiveCabinet } from '../../../stores/project-store';
 import { useUIStore } from '../../../stores/ui-store';
@@ -48,14 +50,15 @@ function CabinetList({ activeId }: { activeId: string | undefined }) {
 
 function EditorWorkspace({ cabinet }: { cabinet: ProjectCabinet }) {
   const computed = useCabinetCalculations(cabinet);
+  const [cellSel, setCellSel] = useState<CellRef | null>(null);
   const duplicateCabinet = useProjectStore((s) => s.duplicateCabinet);
   const removeCabinet = useProjectStore((s) => s.removeCabinet);
   const confirm = useUIStore((s) => s.confirm);
 
   return (
     <>
-      <CabinetParams cabinet={cabinet} />
-      <CabinetPreview cabinet={cabinet} computed={computed} />
+      <CabinetParams cabinet={cabinet} selectedCell={cellSel} onSelectCell={setCellSel} />
+      <CabinetPreview cabinet={cabinet} selectedCell={cellSel} onSelectCell={setCellSel} />
       <aside className="w-[340px] shrink-0 h-full overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-bg-card)] p-4">
         <div className="flex items-center justify-between mb-3 gap-2">
           <span className="text-xs text-[var(--color-text-muted)] font-mono truncate">
@@ -90,7 +93,7 @@ export default function EditorPage() {
         <EditorWorkspace key={cabinet.id} cabinet={cabinet} />
       ) : (
         <EmptyState icon={<PenTool size={32} />} title="Projede dolap yok"
-          text="Duvar Yerleşimi sayfasından otomatik yerleşim yapabilir ya da buradan tek tek dolap ekleyebilirsiniz."
+          text="Gardırop, kitaplık, ayakkabılık gibi bağımsız mobilyaları ya da mutfak dolaplarını buradan ekleyin. Mutfakta duvar ölçüsünden otomatik yerleşim için Duvar Yerleşimi sayfasını kullanın."
           action={<AddCabinetMenu onAdd={(t) => addCabinet(t)} />} />
       )}
     </div>

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { computeProject } from '../../core/project/project-calc';
 import { DEFAULT_SETTINGS, mergeSettings } from '../../core/project/default-settings';
-import { createProject, createWall, effectiveWallWidth, normalizeProject } from '../../core/project/project-factory';
+import { createProject, createWall, effectiveWallWidth, nextWallName, normalizeProject } from '../../core/project/project-factory';
 import { createProjectCabinet } from '../../core/engine/cabinet-factory';
 import type { AppSettings } from '../../core/models/settings';
 
@@ -13,7 +13,7 @@ const priced: AppSettings = {
     back: { name: 'Arkalık', pricePerSheet: 1000 },
   },
   bandPrices: { '0.8': 10, '1': 20, '2': 30 },
-  hardwarePrices: { hinge: 50, rail: 200, metal_drawer: 800, confirmat: 1, shelf_pin: 1, leg: 20, handle: 40 },
+  hardwarePrices: { hinge: 50, rail: 200, metal_drawer: 800, confirmat: 1, shelf_pin: 1, leg: 20, handle: 40, gas_strut: 30, lift_system: 900, hanger_rod: 150 },
   laborPerCabinet: 1000,
   profitPercent: 20,
   vatPercent: 20,
@@ -105,6 +105,18 @@ describe('ayarlar ve proje fabrikası', () => {
     const p = createProject({ id: 'p', spaceId: 's', wallId: 'w', name: 'A', customerName: 'B', now: '2026-01-01T00:00:00.000Z' });
     expect(p.spaces[0].walls[0]).toMatchObject({ id: 'w', effectiveWidth: 2995 });
     expect(p.cabinets).toEqual([]);
+  });
+
+  it('bağımsız mobilya projesi duvarsız başlar', () => {
+    const p = createProject({ id: 'p', spaceId: 's', wallId: 'w', name: 'A', customerName: 'B', now: '2026-01-01T00:00:00.000Z', kind: 'furniture' });
+    expect(p.spaces).toEqual([]);
+  });
+
+  it('sıradaki duvar adı kullanılmayan ilk harf', () => {
+    expect(nextWallName([])).toBe('A Duvarı');
+    expect(nextWallName(['A Duvarı', 'C Duvarı'])).toBe('B Duvarı');
+    const all = Array.from({ length: 26 }, (_, i) => `${String.fromCharCode(65 + i)} Duvarı`);
+    expect(nextWallName(all)).toBe('Duvar 27');
   });
 
   it('kullanılabilir duvar genişliği en dar ölçüden pay düşülerek bulunur', () => {

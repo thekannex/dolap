@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Upload, FolderOpen, Copy, Download, Trash2, Ruler } from 'lucide-react';
+import { Plus, Upload, FolderOpen, Copy, Download, Trash2, Ruler, CookingPot, Shirt, Loader2 } from 'lucide-react';
 import { listProjects, saveProject, deleteProject } from '../../../core/persistence/db';
 import type { SavedProject } from '../../../core/persistence/db';
 import { exportProjectJSON, importProjectJSON } from '../../../core/persistence/json-io';
 import { normalizeProject } from '../../../core/project/project-factory';
+import type { ProjectKind } from '../../../core/project/project-factory';
 import { formatDateTime, safeFileName } from '../../../core/utils/format';
 import { useProjectStore } from '../../../stores/project-store';
 import { useUIStore } from '../../../stores/ui-store';
@@ -11,16 +12,46 @@ import { openWithoutSaving } from '../../../stores/autosave';
 import { pickTextFile, saveText } from '../../lib/files';
 import { Button, Card, TextInput } from '../shared/ui';
 
+const PROJECT_KINDS: Array<{ value: ProjectKind; title: string; text: string; icon: typeof Ruler }> = [
+  { value: 'kitchen', title: 'Mutfak', text: 'Duvar ölçüsünden alt ve üst dolapları otomatik yerleştirir.', icon: CookingPot },
+  { value: 'furniture', title: 'Bağımsız mobilya', text: 'Gardırop, kitaplık, ayakkabılık, şifonyer ya da tek bir dolap.', icon: Shirt },
+];
+
 function NewProjectForm({ onCancel }: { onCancel?: () => void }) {
   const newProject = useProjectStore((s) => s.newProject);
+  const setActivePage = useUIStore((s) => s.setActivePage);
+  const setNewProjectRequested = useUIStore((s) => s.setNewProjectRequested);
   const [name, setName] = useState('');
   const [customer, setCustomer] = useState('');
+  const [kind, setKind] = useState<ProjectKind>('kitchen');
+
+  const submit = () => {
+    if (!name.trim()) return;
+    setNewProjectRequested(false);
+    newProject(name.trim(), customer.trim(), kind);
+    if (kind === 'furniture') setActivePage('editor');
+  };
 
   return (
     <Card title="Yeni proje">
       <form className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3"
-        onSubmit={(e) => { e.preventDefault(); if (name.trim()) newProject(name.trim(), customer.trim()); }}>
-        <TextInput label="Proje adı" value={name} onChange={setName} placeholder="Örn: Yılmaz Mutfak" />
+        onSubmit={(e) => { e.preventDefault(); submit(); }}>
+        <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Proje türü">
+          {PROJECT_KINDS.map(({ value, title, text, icon: Icon }) => (
+            <button key={value} type="button" role="radio" aria-checked={kind === value} onClick={() => setKind(value)}
+              className={`flex gap-3 items-start text-left rounded-lg border p-3 transition-colors ${
+                kind === value ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/5' : 'border-[var(--color-border)] hover:border-[var(--color-text-dim)]'
+              }`}>
+              <Icon size={20} className={kind === value ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-dim)]'} />
+              <span>
+                <span className="block text-sm font-semibold text-[var(--color-text)]">{title}</span>
+                <span className="block text-xs text-[var(--color-text-muted)]">{text}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+        <TextInput label="Proje adı" value={name} onChange={setName} autoFocus
+          placeholder={kind === 'kitchen' ? 'Örn: Yılmaz Mutfak' : 'Örn: Yılmaz Yatak Odası Gardırop'} />
         <TextInput label="Müşteri" value={customer} onChange={setCustomer} placeholder="Örn: Ayşe Yılmaz" />
         <div className="sm:col-span-2 flex justify-end gap-2">
           {onCancel && <Button onClick={onCancel}>Vazgeç</Button>}
@@ -35,7 +66,10 @@ export default function ProjectList() {
   const notify = useUIStore((s) => s.notify);
   const confirm = useUIStore((s) => s.confirm);
   const [projects, setProjects] = useState<SavedProject[] | null>(null);
-  const [showNew, setShowNew] = useState(false);
+  const newProjectRequested = useUIStore((s) => s.newProjectRequested);
+  const setNewProjectRequested = useUIStore((s) => s.setNewProjectRequested);
+  const [showNew, setShowNewState] = useState(newProjectRequested);
+  const setShowNew = (v: boolean) => { setShowNewState(v); if (!v) setNewProjectRequested(false); };
 
   const refresh = useCallback(async () => {
     try {
@@ -114,6 +148,12 @@ export default function ProjectList() {
               <p>3. Kesim listesi, plaka planı ve müşteri teklifini PDF/Excel olarak alın.</p>
             </div>
           </div>
+        )}
+
+        {projects === null && (
+          <p className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
+            <Loader2 size={15} className="animate-spin" /> Kayıtlı projeler yükleniyor…
+          </p>
         )}
 
         {(showNew || empty) && <NewProjectForm onCancel={empty ? undefined : () => setShowNew(false)} />}

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type PageId = 'project' | 'wall-layout' | 'editor' | 'cut-list' | '3d-preview' | 'settings';
+export type PageId = 'project' | 'wall-layout' | 'composer' | 'editor' | 'cut-list' | '3d-preview' | 'settings';
 
 export interface Toast {
   id: number;
@@ -21,9 +21,12 @@ export interface UIStore {
   hoveredPartId: string | null;
   toasts: Toast[];
   confirmRequest: ConfirmRequest | null;
+  /** Proje listesine dönüldüğünde yeni proje formu açık gelsin mi. */
+  newProjectRequested: boolean;
 
   setActivePage: (page: PageId) => void;
   setHoveredPartId: (id: string | null) => void;
+  setNewProjectRequested: (v: boolean) => void;
   notify: (kind: Toast['kind'], text: string) => void;
   dismissToast: (id: number) => void;
   confirm: (opts: Omit<ConfirmRequest, 'resolve'>) => Promise<boolean>;
@@ -37,9 +40,11 @@ export const useUIStore = create<UIStore>((set, get) => ({
   hoveredPartId: null,
   toasts: [],
   confirmRequest: null,
+  newProjectRequested: false,
 
   setActivePage: (page) => set({ activePage: page }),
   setHoveredPartId: (id) => set({ hoveredPartId: id }),
+  setNewProjectRequested: (v) => set({ newProjectRequested: v }),
 
   notify: (kind, text) => {
     const id = ++toastSeq;

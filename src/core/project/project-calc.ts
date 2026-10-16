@@ -5,6 +5,11 @@ import type { AppSettings } from '../models/settings';
 import { computeCabinet, partBandMeters } from '../engine/compute-cabinet';
 import type { ComputedCabinet, ComputedPart, HardwareKey, PartMaterial } from '../engine/compute-cabinet';
 import { optimizeCutting } from '../optimizer/guillotine';
+import { placeWallCabinets } from '../layout/wall-elevation';
+import { SINK_PRESETS, checkSinkDirection } from '../engine/sink';
+import { findSinkNeighbors } from '../layout/sink-neighbors';
+import { compositionComputeOptions } from '../layout/composition';
+import type { SinkLayout } from '../engine/sink';
 import type { CutPiece, OptimizationResult } from '../optimizer/guillotine';
 
 export const MATERIAL_ORDER: PartMaterial[] = ['body', 'front', 'back'];
@@ -61,6 +66,18 @@ export interface ProjectQuote {
   total: number;
 }
 
+/** Tezgâhta yapılacak evye kesimi ve batarya deliği. */
+export interface CountertopOp {
+  cabinetId: string;
+  cabinetCode: string;
+  sinkName: string;
+  mount: 'inset' | 'undermount';
+  layout: SinkLayout;
+  wallId: string | null;
+  /** Dolabın duvar solundan uzaklığı (mm); duvara atanmamışsa null. */
+  cabinetX: number | null;
+}
+
 export interface CabinetWarning extends ValidationWarning {
   cabinetCode: string;
 }
@@ -74,6 +91,7 @@ export interface ProjectComputation {
   costLines: CostLine[];
   quote: ProjectQuote;
   warnings: CabinetWarning[];
+  countertopOps: CountertopOp[];
   totals: {
     cabinetCount: number;
     partCount: number;
@@ -89,7 +107,7 @@ export function materialLabel(settings: AppSettings, material: PartMaterial, thi
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /** Projedeki tüm dolapları hesaplar, levhalara göre gruplar, plaka yerleşimini ve maliyeti çıkarır. */
-export function computeProject(project: Pick<Project, 'cabinets'>, settings: AppSettings): ProjectComputation {
+export function computeProject(project: Pick<Project, 'cabinets'> & Partial<Pick<Project, 'spaces'>>, settings: AppSettings): ProjectComputation {
   const opts = {
     sheetWidth: settings.sheetWidth,
     sheetHeight: settings.sheetHeight,
@@ -97,7 +115,10 @@ export function computeProject(project: Pick<Project, 'cabinets'>, settings: App
     frontBand: settings.frontBand,
   };
 
-  const cabinets = project.cabinets.map((cabinet) => ({ cabinet, computed: computeCabinet(cabinet, opts) }));
+  const cabinets = project.cabinets.map((cabinet) => ({
+    cabinet,
+    computed: computeCabinet(cabinet, { ...opts, ...compositionComputeOptions(cabinet, project.cabinets) }),
+  }));
 
   const parts: ProjectPart[] = [];
   const warnings: CabinetWarning[] = [];
@@ -216,6 +237,39 @@ export function computeProject(project: Pick<Project, 'cabinets'>, settings: App
     });
   }
 
+  // --- Tezgâh işlemleri (evye kesimi, batarya deliği) ---
+  const wallX = new Map<string, number>();
+  const byWall = new Map<string, ProjectCabinet[]>();
+  for (const c of project.cabinets) {
+    if (!c.wallId) continue;
+    const list = byWall.get(c.wallId);
+    if (list) list.push(c); else byWall.set(c.wallId, [c]);
+  }
+  for (const list of byWall.values()) {
+    for (const p of placeWallCabinets(list)) if (p.copy === 0) wallX.set(p.cabinetId, p.x);
+  }
+  const countertopOps: CountertopOp[] = [];
+  for (const { cabinet, computed } of cabinets) {
+    if (!computed.sink || !cabinet.sink) continue;
+    const spec = cabinet.sink;
+    const preset = SINK_PRESETS.find((p) => p.id === spec.presetId);
+    const wall = project.spaces?.flatMap((s) => s.walls).find((w) => w.id === cabinet.wallId);
+    if (wall) {
+      const neighbors = findSinkNeighbors(cabinet.id, byWall.get(wall.id) ?? [], wall);
+      const dirWarning = neighbors ? checkSinkDirection(spec, computed.sink, neighbors, cabinet.code) : null;
+      if (dirWarning) warnings.push({ ...dirWarning, cabinetCode: cabinet.code });
+    }
+    countertopOps.push({
+      cabinetId: cabinet.id,
+      cabinetCode: cabinet.code,
+      sinkName: preset?.name ?? `Özel evye ${spec.outerWidth}×${spec.outerDepth}`,
+      mount: spec.mount,
+      layout: computed.sink,
+      wallId: cabinet.wallId,
+      cabinetX: wallX.get(cabinet.id) ?? null,
+    });
+  }
+
   const subtotal = round2(costLines.reduce((s, c) => s + c.total, 0));
   const profit = round2(subtotal * settings.profitPercent / 100);
   const net = round2(subtotal + profit);
@@ -230,6 +284,7 @@ export function computeProject(project: Pick<Project, 'cabinets'>, settings: App
     costLines,
     quote: { subtotal, profit, net, vat, total: round2(net + vat) },
     warnings,
+    countertopOps,
     totals: {
       cabinetCount,
       partCount: parts.reduce((s, p) => s + p.quantity, 0),

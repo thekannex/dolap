@@ -27,11 +27,13 @@ export default function ProjectOverview() {
   const duplicateCabinet = useProjectStore((s) => s.duplicateCabinet);
   const setActivePage = useUIStore((s) => s.setActivePage);
   const confirm = useUIStore((s) => s.confirm);
+  const setNewProjectRequested = useUIStore((s) => s.setNewProjectRequested);
   const computation = useProjectComputation();
 
   const [newSpaceName, setNewSpaceName] = useState('');
 
   const wallNames = new Map(project.spaces.flatMap((s) => s.walls.map((w) => [w.id, `${s.name} · ${w.name}`] as const)));
+  const compositionNames = new Map(project.compositions.map((c) => [c.id, c.name] as const));
   const errorCount = computation?.warnings.filter((w) => w.severity === 'error').length ?? 0;
 
   const goToWall = (spaceId: string, wallId: string) => {
@@ -50,14 +52,22 @@ export default function ProjectOverview() {
     closeProject();
   };
 
+  const handleNewProject = async () => {
+    setNewProjectRequested(true);
+    await handleClose();
+  };
+
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-6xl mx-auto p-6 flex flex-col gap-5">
         <div className="flex items-center justify-between gap-3">
           <Button variant="ghost" size="sm" onClick={handleClose}><ArrowLeft size={14} /> Tüm projeler</Button>
-          <Button size="sm" onClick={() => saveText(exportProjectJSON(project), `${safeFileName(project.name)}.dolap.json`, 'application/json')}>
-            <Download size={14} /> Yedek al
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => saveText(exportProjectJSON(project), `${safeFileName(project.name)}.dolap.json`, 'application/json')}>
+              <Download size={14} /> Yedek al
+            </Button>
+            <Button size="sm" variant="primary" onClick={handleNewProject}><Plus size={14} /> Yeni proje</Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -99,7 +109,7 @@ export default function ProjectOverview() {
                       <th className="text-left px-4 py-2 font-medium">Kod</th>
                       <th className="text-left px-4 py-2 font-medium">Dolap</th>
                       <th className="text-left px-4 py-2 font-medium">G × Y × D</th>
-                      <th className="text-left px-4 py-2 font-medium">Duvar</th>
+                      <th className="text-left px-4 py-2 font-medium">Yer</th>
                       <th className="text-center px-2 py-2 font-medium">Adet</th>
                       <th className="px-4 py-2" />
                     </tr>
@@ -113,7 +123,7 @@ export default function ProjectOverview() {
                           <div className="text-[11px] text-[var(--color-text-dim)]">{CABINET_TYPE_LABELS[c.type]}</div>
                         </td>
                         <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">{c.width} × {c.height} × {c.depth}</td>
-                        <td className="px-4 py-2 text-xs text-[var(--color-text-muted)]">{c.wallId ? wallNames.get(c.wallId) ?? '—' : '—'}</td>
+                        <td className="px-4 py-2 text-xs text-[var(--color-text-muted)]">{c.groupId ? `Çizim · ${compositionNames.get(c.groupId) ?? '—'}` : c.wallId ? wallNames.get(c.wallId) ?? '—' : '—'}</td>
                         <td className="px-2 py-2 text-center font-mono">{c.quantity}</td>
                         <td className="px-4 py-2">
                           <div className="flex justify-end gap-1">
@@ -133,6 +143,11 @@ export default function ProjectOverview() {
 
             <Card title="Mekânlar ve duvarlar">
               <div className="flex flex-col divide-y divide-[var(--color-border)]">
+                {project.spaces.length === 0 && (
+                  <p className="px-4 py-3 text-sm text-[var(--color-text-muted)]">
+                    Bağımsız mobilyada duvar gerekmez. Dolapları duvar ölçüsüne göre yerleştirmek isterseniz bir mekân ekleyip duvar tanımlayın.
+                  </p>
+                )}
                 {project.spaces.map((space) => (
                   <div key={space.id}>
                     <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--color-bg)]">
@@ -141,7 +156,7 @@ export default function ProjectOverview() {
                         <span className="text-xs text-[var(--color-text-dim)] ml-2">Tavan {space.ceilingHeight} mm</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => addWall(space.id, `${String.fromCharCode(65 + space.walls.length)} Duvarı`)}>
+                        <Button size="sm" variant="ghost" onClick={() => addWall(space.id)}>
                           <Plus size={13} /> Duvar
                         </Button>
                         <Button size="sm" variant="danger" aria-label="Mekânı sil" title="Mekânı sil" onClick={async () => {

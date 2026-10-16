@@ -4,6 +4,7 @@ import type { Project } from '../models/project';
 import type { AppSettings } from '../models/settings';
 import type { ProjectComputation } from '../project/project-calc';
 import { CABINET_TYPE_LABELS } from '../engine/cabinet-factory';
+import { sinkDirectionLabel } from '../engine/sink';
 import { bandLabel, formatDate, formatMoney, formatNumber } from '../utils/format';
 
 export interface ExportContext {
@@ -179,6 +180,35 @@ export async function generateWorkshopPDF(ctx: ExportContext): Promise<jsPDF> {
     y = lastY(doc) + 8;
   }
 
+  // Tezgâh işlemleri
+  if (c.countertopOps.length > 0) {
+    y = sectionTitle(doc, 'Tezgâh İşlemleri (evye kesimi ve batarya deliği)', y);
+    autoTable(doc, {
+      ...tableStyles,
+      startY: y + 1,
+      head: [['Dolap', 'Evye / yön', 'Kesim G×D', 'Kesim yeri', 'Duvar solundan', 'Batarya']],
+      body: c.countertopOps.map((o) => {
+        const L = o.layout;
+        const dir = ctx.project.cabinets.find((cab) => cab.id === o.cabinetId)?.sink?.drainer ?? 'none';
+        return [
+          o.cabinetCode,
+          `${o.sinkName}\n${o.mount === 'undermount' ? 'Tezgâh altı' : 'Ankastre'} · ${sinkDirectionLabel(dir)}`,
+          `${formatNumber(L.cutout.w)} × ${formatNumber(L.cutout.h)}`,
+          `dolap solundan ${formatNumber(L.cutout.x)}\ntezgâh önünden ${formatNumber(L.cutout.y)}`,
+          o.cabinetX !== null ? formatNumber(o.cabinetX + L.cutout.x) : '—',
+          L.faucet ? `Ø${L.faucet.diameter} · soldan ${formatNumber(L.faucet.x)}, önden ${formatNumber(L.faucet.y)}${L.faucet.onSink ? ' (evyede)' : ''}` : '—',
+        ];
+      }),
+      columnStyles: { 2: { halign: 'center' }, 4: { halign: 'center' } },
+    });
+    y = lastY(doc) + 3;
+    doc.setFontSize(7.5);
+    doc.setTextColor(...MUTED);
+    doc.text('Ölçüler mm. "Kesim yeri" kesimin sol-ön köşesidir. Kesmeden önce evyenin kendi şablonuyla karşılaştırın.', 14, y + 2);
+    doc.setTextColor(...DARK);
+    y += 10;
+  }
+
   // Maliyet
   y = sectionTitle(doc, 'Maliyet Dökümü', y);
   autoTable(doc, {
@@ -272,10 +302,15 @@ function drawSheetPage(
 function cabinetSummary(c: ProjectComputation['cabinets'][number]): string {
   const { cabinet, computed } = c;
   const bits: string[] = [];
-  if (computed.doorCount > 0) bits.push(`${computed.doorCount} kapak`);
+  if (computed.doorCount > 0) {
+    if (cabinet.doorOpening === 'up') bits.push(computed.doorCount > 1 ? 'katlanır kapak (yukarı açılır)' : 'kalkar kapak (yukarı açılır)');
+    else bits.push(`${computed.doorCount} kapak`);
+  }
   if (computed.drawerFrontHeights.length > 0) bits.push(`${computed.drawerFrontHeights.length} çekmece`);
   const shelves = cabinet.shelfCount + cabinet.fixedShelfCount;
   if (shelves > 0 && cabinet.type !== 'filler') bits.push(`${shelves} raf`);
+  if (cabinet.hangerRodCount > 0) bits.push(`${cabinet.hangerRodCount} askı`);
+  if (cabinet.sink && computed.sink) bits.push(`evye ${cabinet.sink.outerWidth}×${cabinet.sink.outerDepth} (${sinkDirectionLabel(cabinet.sink.drainer).toLowerCase()})`);
   return bits.join(', ') || '—';
 }
 

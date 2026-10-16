@@ -11,6 +11,13 @@ export interface Project {
   updatedAt: string;
   spaces: Space[];
   cabinets: ProjectCabinet[];
+  /** Serbest çizimle kurulan mobilya kompozisyonları. */
+  compositions: Composition[];
+}
+
+export interface Composition {
+  id: string;
+  name: string;
 }
 
 export interface Space {

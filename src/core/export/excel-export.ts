@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import type { ExportContext } from './pdf-export';
 import { bandLabel } from '../utils/format';
+import { sinkDirectionLabel } from '../engine/sink';
 
 /** Proje dökümünü çok sayfalı bir Excel çalışma kitabı olarak üretir. */
 export function buildWorkbook(ctx: ExportContext): XLSX.WorkBook {
@@ -58,6 +59,29 @@ export function buildWorkbook(ctx: ExportContext): XLSX.WorkBook {
     'Birim fiyat (₺/m)': b.unitPrice, 'Toplam (₺)': b.total,
   }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bands), 'Kenar Bandı');
+
+  if (c.countertopOps.length > 0) {
+    const ops = c.countertopOps.map((o) => {
+      const L = o.layout;
+      const dir = ctx.project.cabinets.find((cab) => cab.id === o.cabinetId)?.sink?.drainer ?? 'none';
+      return {
+        'Dolap': o.cabinetCode,
+        'Evye': o.sinkName,
+        'Montaj': o.mount === 'undermount' ? 'Tezgâh altı' : 'Ankastre',
+        'Yön': sinkDirectionLabel(dir),
+        'Kesim genişlik': L.cutout.w,
+        'Kesim derinlik': L.cutout.h,
+        'Kesim dolap solundan': L.cutout.x,
+        'Kesim tezgâh önünden': L.cutout.y,
+        'Kesim duvar solundan': o.cabinetX !== null ? o.cabinetX + L.cutout.x : '',
+        'Batarya Ø': L.faucet?.diameter ?? '',
+        'Batarya dolap solundan': L.faucet?.x ?? '',
+        'Batarya tezgâh önünden': L.faucet?.y ?? '',
+        'Batarya yeri': L.faucet ? (L.faucet.onSink ? 'Evyede' : 'Tezgâhta') : '',
+      };
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ops), 'Tezgâh İşlemleri');
+  }
 
   const cost = [
     ...c.costLines.map((l) => ({ 'Kalem': l.description, 'Miktar': l.quantity, 'Birim': l.unit, 'Birim fiyat (₺)': l.unitPrice, 'Toplam (₺)': l.total })),
