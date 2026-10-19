@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { FolderOpen, MapPin, PenTool, Table2, Box, Settings, Check, Loader2, AlertCircle, Shapes } from 'lucide-react';
+import { FolderOpen, Table2, Box, Settings, Check, Loader2, AlertCircle, ChevronRight } from 'lucide-react';
 import { useUIStore } from './stores/ui-store';
 import type { PageId } from './stores/ui-store';
-import { useProjectStore } from './stores/project-store';
+import { useProjectStore, useActiveJob } from './stores/project-store';
+import { JOB_ICONS, JOB_PAGES, JOB_STEPS, firstStep } from './ui/navigation';
+import { jobKindInfo } from './core/project/jobs';
 import { useSaveStatus, startAutosave, restoreLastProject } from './stores/autosave';
 import { formatDateTime } from './core/utils/format';
 import ProjectPage from './ui/components/project/ProjectPage';
@@ -12,16 +14,44 @@ import CutListPage from './ui/components/cut-list/CutListPage';
 import Cabinet3DView from './ui/components/cabinet-3d/Cabinet3DView';
 import SettingsPage from './ui/components/settings/SettingsPage';
 import ComposerPage from './ui/components/composer/ComposerPage';
+import WallShapePage from './ui/components/wall-layout/WallShapePage';
 import { Toasts, ConfirmDialog, ErrorBoundary } from './ui/components/shared/Overlays';
 
-const PAGES: Array<{ id: PageId; label: string; icon: typeof FolderOpen; needsProject: boolean }> = [
-  { id: 'project', label: 'Proje', icon: FolderOpen, needsProject: false },
-  { id: 'wall-layout', label: 'Duvar Yerleşimi', icon: MapPin, needsProject: true },
-  { id: 'composer', label: 'Serbest Çizim', icon: Shapes, needsProject: true },
-  { id: 'editor', label: 'Dolaplar', icon: PenTool, needsProject: true },
-  { id: 'cut-list', label: 'Kesim ve Teklif', icon: Table2, needsProject: true },
-  { id: '3d-preview', label: '3D', icon: Box, needsProject: true },
+/** Tüm projeye ait sayfalar (işten bağımsız). */
+const PROJECT_PAGES: Array<{ id: PageId; label: string; icon: typeof FolderOpen }> = [
+  { id: 'cut-list', label: 'Kesim ve Teklif', icon: Table2 },
+  { id: '3d-preview', label: '3D', icon: Box },
 ];
+
+const navCls = (on: boolean) => `flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs whitespace-nowrap transition-colors ${
+  on ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)] font-semibold' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-hover)]/60'
+}`;
+
+/** Açık işi değiştiren seçici: işin türü simgesiyle. */
+function JobSwitcher({ page }: { page: PageId }) {
+  const jobs = useProjectStore((s) => s.project?.jobs ?? []);
+  const job = useActiveJob();
+  const setActiveJob = useProjectStore((s) => s.setActiveJob);
+  const setActivePage = useUIStore((s) => s.setActivePage);
+  if (!job) return null;
+  const Icon = JOB_ICONS[job.kind];
+  return (
+    <label className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg-input)] pl-2 pr-1 py-0.5" title={jobKindInfo(job.kind).label}>
+      <Icon size={14} className="text-[var(--color-accent)] shrink-0" />
+      <select value={job.id} aria-label="Açık iş"
+        onChange={(e) => {
+          const next = jobs.find((j) => j.id === e.target.value);
+          if (!next) return;
+          setActiveJob(next.id);
+          // İşe bağlı bir sayfadaysak yeni işin aynı adımına (yoksa ilk adımına) geç
+          if (JOB_PAGES.has(page)) setActivePage(JOB_STEPS[next.kind].some((s) => s.id === page) ? page : firstStep(next.kind));
+        }}
+        className="bg-transparent text-xs font-semibold max-w-40 truncate focus:outline-none cursor-pointer">
+        {jobs.map((j) => <option key={j.id} value={j.id}>{j.name} · {jobKindInfo(j.kind).label}</option>)}
+      </select>
+    </label>
+  );
+}
 
 function SaveIndicator() {
   const { status, lastSavedAt } = useSaveStatus();
@@ -44,6 +74,8 @@ export default function App() {
   const setActivePage = useUIStore((s) => s.setActivePage);
   const projectName = useProjectStore((s) => s.project?.name);
   const hasProject = projectName !== undefined;
+  const job = useActiveJob();
+  const steps = job ? JOB_STEPS[job.kind] : [];
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -52,8 +84,10 @@ export default function App() {
     return stop;
   }, []);
 
-  // Proje kapanınca proje gerektiren sayfalardan çık
-  const page: PageId = !hasProject && PAGES.find((p) => p.id === activePage)?.needsProject ? 'project' : activePage;
+  // Proje kapanınca proje sayfasına; açık işin adımı olmayan sayfadan işin ilk adımına
+  let page: PageId = activePage;
+  if (!hasProject && page !== 'settings') page = 'project';
+  else if (JOB_PAGES.has(page) && !steps.some((s) => s.id === page)) page = job ? firstStep(job.kind) : 'project';
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden">
@@ -66,21 +100,32 @@ export default function App() {
           )}
         </div>
 
-        <nav className="flex items-center gap-0.5 flex-1">
-          {PAGES.map(({ id, label, icon: Icon, needsProject }) => {
-            const disabled = needsProject && !hasProject;
-            return (
-              <button key={id} disabled={disabled} onClick={() => setActivePage(id)}
-                title={disabled ? 'Önce bir proje açın' : undefined}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                  page === id
-                    ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)] font-semibold'
-                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-hover)]/60'
-                }`}>
-                <Icon size={14} /> {label}
-              </button>
-            );
-          })}
+        <nav className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto">
+          <button onClick={() => setActivePage('project')} className={navCls(page === 'project')}>
+            <FolderOpen size={14} /> Proje
+          </button>
+          {hasProject && job && (
+            <>
+              <ChevronRight size={14} className="text-[var(--color-text-dim)] shrink-0" />
+              <JobSwitcher page={page} />
+              {steps.map(({ id, label, icon: Icon, hint }, i) => (
+                <button key={id} onClick={() => setActivePage(id)} title={hint} className={navCls(page === id)}>
+                  <span className={`w-4 h-4 rounded-full text-[10px] leading-4 text-center font-bold ${page === id ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-border)] text-[var(--color-text-muted)]'}`}>{i + 1}</span>
+                  <Icon size={14} /> {label}
+                </button>
+              ))}
+            </>
+          )}
+          {hasProject && (
+            <>
+              <span className="w-px h-5 bg-[var(--color-border)] mx-1 shrink-0" />
+              {PROJECT_PAGES.map(({ id, label, icon: Icon }) => (
+                <button key={id} onClick={() => setActivePage(id)} className={navCls(page === id)} title="Tüm proje">
+                  <Icon size={14} /> {label}
+                </button>
+              ))}
+            </>
+          )}
         </nav>
 
         <SaveIndicator />
@@ -98,9 +143,10 @@ export default function App() {
             <Loader2 size={18} className="animate-spin mr-2" /> Yükleniyor
           </div>
         ) : (
-          <ErrorBoundary key={page}>
+          <ErrorBoundary key={`${page}-${job?.id ?? ""}`}>
             {page === 'project' && <ProjectPage />}
             {page === 'wall-layout' && <WallLayoutPage />}
+            {page === 'wall-shape' && <WallShapePage />}
             {page === 'composer' && <ComposerPage />}
             {page === 'editor' && <EditorPage />}
             {page === 'cut-list' && <CutListPage />}

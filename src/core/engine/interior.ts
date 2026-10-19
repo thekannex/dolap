@@ -614,7 +614,10 @@ export function interiorFromCabinet(cab: CabinetState): CabinetInterior {
   if (cab.drawerCount > 0) {
     cell = newCell('drawer', { drawerCount: cab.drawerCount });
   } else {
-    const shelves = distributeShelves(inner.h, cab.shelfCount + cab.fixedShelfCount, f.t);
+    // Askılı dolapta tek şapkalık rafı tepeden 350mm aşağıda, askı onun altında
+    const shelves = cab.hangerRodCount > 0 && !cab.isOpenShelf
+      ? (inner.h > 1200 ? [roundDown05(inner.h - 350 - f.t)] : [])
+      : distributeShelves(inner.h, cab.shelfCount + cab.fixedShelfCount, f.t);
     if (cab.isOpenShelf) cell = newCell('open', { shelves });
     else if (cab.doorOpening === 'up') cell = newCell('door', { opening: 'up', shelves });
     else cell = newCell('door', { doorCount: cab.width > 600 ? 2 : 1, hinge: cab.doorHingeSide === 'right' ? 'right' : 'left', shelves, rod: cab.hangerRodCount > 0 });

@@ -10,6 +10,8 @@ import { bandLabel, formatMoney, formatNumber, safeFileName } from '../../../cor
 import { saveBlob, saveText } from '../../lib/files';
 import { Button, Card, EmptyState, Stat } from '../shared/ui';
 import { WarningItem } from '../cabinet-editor/DetailPanels';
+import JobScopeSelect from '../shared/JobScopeSelect';
+import { projectForJob } from '../../../core/project/jobs';
 
 type Tab = 'parts' | 'sheets' | 'hardware' | 'cost';
 
@@ -60,13 +62,16 @@ export default function CutListPage() {
   const settings = useSettingsStore((s) => s.settings);
   const setActivePage = useUIStore((s) => s.setActivePage);
   const notify = useUIStore((s) => s.notify);
-  const c = useProjectComputation();
+  const scopeRaw = useUIStore((s) => s.scopeJobId);
+  const scope = project?.jobs.some((j) => j.id === scopeRaw) ? scopeRaw : null;
+  const scopeJob = project?.jobs.find((j) => j.id === scope);
+  const c = useProjectComputation(scope);
   const [tab, setTab] = useState<Tab>('parts');
   const [busy, setBusy] = useState<string | null>(null);
 
   if (!project || !c) return null;
 
-  if (project.cabinets.length === 0) {
+  if (c.cabinets.length === 0 && !scope) {
     return (
       <EmptyState icon={<Table2 size={32} />} title="Kesim listesi için dolap gerekli"
         text="Önce duvar yerleşimini uygulayın ya da dolap ekleyin."
@@ -74,8 +79,10 @@ export default function CutListPage() {
     );
   }
 
-  const ctx: ExportContext = { project, computation: c, settings };
-  const base = safeFileName(project.name);
+  // Tek iş seçiliyse çıktılar o işin adıyla
+  const scoped = scopeJob ? { ...projectForJob(project, scope), name: `${project.name} - ${scopeJob.name}` } : project;
+  const ctx: ExportContext = { project: scoped, computation: c, settings };
+  const base = safeFileName(scoped.name);
   const pricesMissing = c.costLines.some((l) => l.unitPrice === 0 && l.quantity > 0);
 
   const run = async (key: string, fn: () => Promise<void> | void) => {
@@ -116,7 +123,10 @@ export default function CutListPage() {
     <div className="flex-1 overflow-auto">
       <div className="max-w-6xl mx-auto p-6 flex flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-bold">Kesim ve Teklif</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-xl font-bold">Kesim ve Teklif</h1>
+            <JobScopeSelect />
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="primary" disabled={busy !== null} onClick={exportWorkshop}>{spin('workshop', <FileText size={15} />)} Atölye PDF</Button>
             <Button disabled={busy !== null} onClick={exportQuote}>{spin('quote', <Receipt size={15} />)} Teklif PDF</Button>

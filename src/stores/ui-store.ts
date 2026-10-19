@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type PageId = 'project' | 'wall-layout' | 'composer' | 'editor' | 'cut-list' | '3d-preview' | 'settings';
+export type PageId = 'project' | 'wall-layout' | 'wall-shape' | 'composer' | 'editor' | 'cut-list' | '3d-preview' | 'settings';
 
 export interface Toast {
   id: number;
@@ -23,7 +23,10 @@ export interface UIStore {
   confirmRequest: ConfirmRequest | null;
   /** Proje listesine dönüldüğünde yeni proje formu açık gelsin mi. */
   newProjectRequested: boolean;
+  /** Kesim, teklif ve 3D'nin kapsamı; null = tüm işler. */
+  scopeJobId: string | null;
 
+  setScopeJobId: (id: string | null) => void;
   setActivePage: (page: PageId) => void;
   setHoveredPartId: (id: string | null) => void;
   setNewProjectRequested: (v: boolean) => void;
@@ -41,7 +44,9 @@ export const useUIStore = create<UIStore>((set, get) => ({
   toasts: [],
   confirmRequest: null,
   newProjectRequested: false,
+  scopeJobId: null,
 
+  setScopeJobId: (id) => set({ scopeJobId: id }),
   setActivePage: (page) => set({ activePage: page }),
   setHoveredPartId: (id) => set({ hoveredPartId: id }),
   setNewProjectRequested: (v) => set({ newProjectRequested: v }),

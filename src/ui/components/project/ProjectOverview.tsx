@@ -1,50 +1,35 @@
-import { useState } from 'react';
-import { ArrowLeft, Download, Plus, Trash2, MapPin, ChevronRight, Pencil, Copy, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Download, Plus, Trash2, ChevronRight, AlertTriangle } from 'lucide-react';
 import { useProjectStore } from '../../../stores/project-store';
 import { useUIStore } from '../../../stores/ui-store';
 import { saveNow } from '../../../stores/autosave';
 import { exportProjectJSON } from '../../../core/persistence/json-io';
-import { CABINET_TYPE_LABELS } from '../../../core/engine/cabinet-factory';
+import { JOB_KINDS, jobContent, jobKindInfo } from '../../../core/project/jobs';
+import type { JobKind } from '../../../core/models/project';
+import { JOB_ICONS, firstStep } from '../../navigation';
 import { formatMoney, safeFileName } from '../../../core/utils/format';
 import { useProjectComputation } from '../../hooks/use-cabinet-calculations';
 import { saveText } from '../../lib/files';
 import { Button, Card, Stat, TextInput } from '../shared/ui';
-import AddCabinetMenu from '../shared/AddCabinetMenu';
 
 export default function ProjectOverview() {
   const project = useProjectStore((s) => s.project)!;
   const updateProjectInfo = useProjectStore((s) => s.updateProjectInfo);
   const closeProject = useProjectStore((s) => s.closeProject);
-  const addSpace = useProjectStore((s) => s.addSpace);
-  const removeSpace = useProjectStore((s) => s.removeSpace);
-  const addWall = useProjectStore((s) => s.addWall);
-  const removeWall = useProjectStore((s) => s.removeWall);
-  const setActiveSpace = useProjectStore((s) => s.setActiveSpace);
-  const setActiveWall = useProjectStore((s) => s.setActiveWall);
-  const setActiveCabinet = useProjectStore((s) => s.setActiveCabinet);
-  const addCabinet = useProjectStore((s) => s.addCabinet);
-  const removeCabinet = useProjectStore((s) => s.removeCabinet);
-  const duplicateCabinet = useProjectStore((s) => s.duplicateCabinet);
+  const activeJobId = useProjectStore((s) => s.activeJobId);
+  const addJob = useProjectStore((s) => s.addJob);
+  const renameJob = useProjectStore((s) => s.renameJob);
+  const removeJob = useProjectStore((s) => s.removeJob);
+  const setActiveJob = useProjectStore((s) => s.setActiveJob);
   const setActivePage = useUIStore((s) => s.setActivePage);
   const confirm = useUIStore((s) => s.confirm);
   const setNewProjectRequested = useUIStore((s) => s.setNewProjectRequested);
   const computation = useProjectComputation();
 
-  const [newSpaceName, setNewSpaceName] = useState('');
-
-  const wallNames = new Map(project.spaces.flatMap((s) => s.walls.map((w) => [w.id, `${s.name} · ${w.name}`] as const)));
-  const compositionNames = new Map(project.compositions.map((c) => [c.id, c.name] as const));
   const errorCount = computation?.warnings.filter((w) => w.severity === 'error').length ?? 0;
 
-  const goToWall = (spaceId: string, wallId: string) => {
-    setActiveSpace(spaceId);
-    setActiveWall(wallId);
-    setActivePage('wall-layout');
-  };
-
-  const editCabinet = (id: string) => {
-    setActiveCabinet(id);
-    setActivePage('editor');
+  const openJob = (id: string, kind: JobKind) => {
+    setActiveJob(id);
+    setActivePage(firstStep(kind));
   };
 
   const handleClose = async () => {
@@ -96,111 +81,54 @@ export default function ProjectOverview() {
           </Card>
 
           <div className="lg:col-span-2 flex flex-col gap-5">
-            <Card title={`Dolaplar (${project.cabinets.length})`}
-              actions={<AddCabinetMenu onAdd={(type) => { const id = addCabinet(type); if (id) editCabinet(id); }} />}>
-              {project.cabinets.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-[var(--color-text-muted)]">
-                  Henüz dolap yok. Duvar ölçüsünden otomatik yerleşim için bir duvar seçin ya da elle dolap ekleyin.
-                </p>
+            <Card title={`İşler (${project.jobs.length})`}>
+              {project.jobs.length === 0 ? (
+                <p className="px-4 py-6 text-sm text-[var(--color-text-muted)]">Henüz iş yok. Aşağıdan mutfak, duvar dolabı ya da bağımsız ünite ekleyin.</p>
               ) : (
-                <table className="w-full text-sm">
-                  <thead className="text-xs uppercase text-[var(--color-text-dim)] bg-[var(--color-bg)]">
-                    <tr>
-                      <th className="text-left px-4 py-2 font-medium">Kod</th>
-                      <th className="text-left px-4 py-2 font-medium">Dolap</th>
-                      <th className="text-left px-4 py-2 font-medium">G × Y × D</th>
-                      <th className="text-left px-4 py-2 font-medium">Yer</th>
-                      <th className="text-center px-2 py-2 font-medium">Adet</th>
-                      <th className="px-4 py-2" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--color-border)]">
-                    {project.cabinets.map((c) => (
-                      <tr key={c.id} className="hover:bg-[var(--color-bg-hover)]/40">
-                        <td className="px-4 py-2 font-mono text-xs">{c.code}</td>
-                        <td className="px-4 py-2">
-                          <button className="text-left hover:text-[var(--color-accent)]" onClick={() => editCabinet(c.id)}>{c.name}</button>
-                          <div className="text-[11px] text-[var(--color-text-dim)]">{CABINET_TYPE_LABELS[c.type]}</div>
-                        </td>
-                        <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">{c.width} × {c.height} × {c.depth}</td>
-                        <td className="px-4 py-2 text-xs text-[var(--color-text-muted)]">{c.groupId ? `Çizim · ${compositionNames.get(c.groupId) ?? '—'}` : c.wallId ? wallNames.get(c.wallId) ?? '—' : '—'}</td>
-                        <td className="px-2 py-2 text-center font-mono">{c.quantity}</td>
-                        <td className="px-4 py-2">
-                          <div className="flex justify-end gap-1">
-                            <Button size="sm" variant="ghost" title="Düzenle" aria-label="Düzenle" onClick={() => editCabinet(c.id)}><Pencil size={13} /></Button>
-                            <Button size="sm" variant="ghost" title="Çoğalt" aria-label="Çoğalt" onClick={() => duplicateCabinet(c.id)}><Copy size={13} /></Button>
-                            <Button size="sm" variant="danger" title="Sil" aria-label="Sil" onClick={async () => {
-                              if (await confirm({ title: 'Dolap silinsin mi?', message: `${c.code} · ${c.name} projeden çıkarılacak.`, confirmLabel: 'Sil', danger: true })) removeCabinet(c.id);
-                            }}><Trash2 size={13} /></Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <ul className="divide-y divide-[var(--color-border)]">
+                  {project.jobs.map((job) => {
+                    const Icon = JOB_ICONS[job.kind];
+                    const content = jobContent(project, job.id);
+                    const walls = content.spaces.reduce((n, sp) => n + sp.walls.length, 0);
+                    const pieces = content.cabinets.reduce((n, c) => n + Math.max(1, c.quantity), 0);
+                    const active = job.id === activeJobId;
+                    return (
+                      <li key={job.id} className={`flex items-center gap-3 px-4 py-3 ${active ? 'bg-[var(--color-accent)]/5' : ''}`}>
+                        <Icon size={22} className="text-[var(--color-accent)] shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <input value={job.name} onChange={(e) => renameJob(job.id, e.target.value)} aria-label="İşin adı"
+                            className="w-full bg-transparent text-sm font-semibold rounded px-1 -ml-1 hover:bg-[var(--color-bg-input)] focus:bg-[var(--color-bg-input)] focus:outline-none" />
+                          <p className="text-xs text-[var(--color-text-muted)]">
+                            {jobKindInfo(job.kind).label} · {pieces} dolap
+                            {job.kind !== 'furniture' && ` · ${walls} duvar`}
+                            {content.compositions.length > 0 && job.kind !== 'kitchen' && ` · ${content.compositions.length} çizim`}
+                          </p>
+                        </div>
+                        <Button size="sm" variant={active ? 'primary' : 'secondary'} onClick={() => openJob(job.id, job.kind)}>
+                          Aç <ChevronRight size={13} />
+                        </Button>
+                        <Button size="sm" variant="danger" aria-label="İşi sil" title="İşi sil" onClick={async () => {
+                          if (await confirm({ title: 'İş silinsin mi?', message: `"${job.name}" ve içindeki ${pieces} dolap${walls ? `, ${walls} duvar` : ''} silinecek.`, confirmLabel: 'Sil', danger: true })) removeJob(job.id);
+                        }}><Trash2 size={13} /></Button>
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
             </Card>
 
-            <Card title="Mekânlar ve duvarlar">
-              <div className="flex flex-col divide-y divide-[var(--color-border)]">
-                {project.spaces.length === 0 && (
-                  <p className="px-4 py-3 text-sm text-[var(--color-text-muted)]">
-                    Bağımsız mobilyada duvar gerekmez. Dolapları duvar ölçüsüne göre yerleştirmek isterseniz bir mekân ekleyip duvar tanımlayın.
-                  </p>
-                )}
-                {project.spaces.map((space) => (
-                  <div key={space.id}>
-                    <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--color-bg)]">
-                      <div>
-                        <span className="text-sm font-semibold">{space.name}</span>
-                        <span className="text-xs text-[var(--color-text-dim)] ml-2">Tavan {space.ceilingHeight} mm</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => addWall(space.id)}>
-                          <Plus size={13} /> Duvar
-                        </Button>
-                        <Button size="sm" variant="danger" aria-label="Mekânı sil" title="Mekânı sil" onClick={async () => {
-                          if (await confirm({ title: 'Mekân silinsin mi?', message: `"${space.name}" ve duvarları silinecek. Dolaplar projede kalır.`, confirmLabel: 'Sil', danger: true })) removeSpace(space.id);
-                        }}><Trash2 size={13} /></Button>
-                      </div>
-                    </div>
-                    {space.walls.map((wall) => {
-                      const count = project.cabinets.filter((c) => c.wallId === wall.id).length;
-                      return (
-                        <div key={wall.id} role="button" tabIndex={0}
-                          className="flex items-center justify-between px-4 py-2.5 hover:bg-[var(--color-bg-hover)]/40 cursor-pointer group"
-                          onClick={() => goToWall(space.id, wall.id)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') goToWall(space.id, wall.id); }}>
-                          <div className="flex items-center gap-2">
-                            <MapPin size={14} className="text-[var(--color-text-dim)]" />
-                            <span className="text-sm">{wall.name}</span>
-                            <span className="text-xs text-[var(--color-text-dim)]">
-                              {wall.effectiveWidth} mm · {count} dolap{wall.obstacles.length > 0 && ` · ${wall.obstacles.length} engel`}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <button aria-label="Duvarı sil" title="Duvarı sil"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                if (await confirm({ title: 'Duvar silinsin mi?', message: `"${wall.name}" silinecek. Üzerindeki dolaplar projede kalır.`, confirmLabel: 'Sil', danger: true })) removeWall(wall.id);
-                              }}
-                              className="p-1 text-[var(--color-text-dim)] hover:text-[var(--color-error)] opacity-0 group-hover:opacity-100 focus:opacity-100">
-                              <Trash2 size={13} />
-                            </button>
-                            <ChevronRight size={16} className="text-[var(--color-text-dim)]" />
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {space.walls.length === 0 && <p className="px-4 py-2.5 text-xs text-[var(--color-text-dim)]">Henüz duvar yok</p>}
-                  </div>
-                ))}
-                <form className="flex items-center gap-2 p-3"
-                  onSubmit={(e) => { e.preventDefault(); if (newSpaceName.trim()) { addSpace(newSpaceName.trim(), 'custom', 2500); setNewSpaceName(''); } }}>
-                  <input value={newSpaceName} onChange={(e) => setNewSpaceName(e.target.value)} placeholder="Yeni mekân adı (örn: Banyo, Yatak odası)"
-                    className="flex-1 bg-[var(--color-bg-input)] border border-[var(--color-border)] rounded-md px-3 py-1.5 text-sm focus:border-[var(--color-border-focus)] focus:outline-none" />
-                  <Button type="submit" size="sm" disabled={!newSpaceName.trim()}><Plus size={13} /> Mekân ekle</Button>
-                </form>
+            <Card title="Yeni iş ekle">
+              <div className="p-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {JOB_KINDS.map(({ value, label, text }) => {
+                  const Icon = JOB_ICONS[value];
+                  return (
+                    <button key={value} onClick={() => { const id = addJob(value); if (id) setActivePage(firstStep(value)); }}
+                      className="flex flex-col gap-1.5 items-start text-left rounded-lg border border-[var(--color-border)] p-3 hover:border-[var(--color-accent)] hover:bg-[var(--color-accent)]/5 transition-colors">
+                      <span className="flex items-center gap-2 text-sm font-semibold"><Icon size={18} className="text-[var(--color-accent)]" /> <Plus size={12} className="-ml-1" /> {label}</span>
+                      <span className="text-xs text-[var(--color-text-muted)]">{text}</span>
+                    </button>
+                  );
+                })}
               </div>
             </Card>
           </div>

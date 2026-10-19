@@ -140,4 +140,6 @@ export interface ProjectCabinet extends CabinetState {
   shareBottom: boolean;
   /** Kutunun arkası duvardan bu kadar önde (kolon/çıkıntı önündeki sığ kutu). */
   backOffset?: number;
+  /** Bağlı olduğu iş. */
+  jobId?: string | null;
 }

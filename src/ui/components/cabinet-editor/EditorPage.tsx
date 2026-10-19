@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { jobContent } from '../../../core/project/jobs';
 import type { CellRef } from '../interior/InteriorSvg';
 import { Copy, Trash2, PenTool } from 'lucide-react';
 import { useProjectStore, useActiveCabinet } from '../../../stores/project-store';
@@ -12,10 +13,26 @@ import { CABINET_TYPE_ICONS } from '../shared/cabinet-icons';
 import { Button, EmptyState } from '../shared/ui';
 import type { ProjectCabinet } from '../../../core/models/cabinet';
 
+/** Açık işin dolapları; duvar ve çizim başlıkları altında gruplu. */
 function CabinetList({ activeId }: { activeId: string | undefined }) {
-  const cabinets = useProjectStore((s) => s.project?.cabinets ?? []);
+  const project = useProjectStore((s) => s.project);
+  const activeJobId = useProjectStore((s) => s.activeJobId);
   const setActiveCabinet = useProjectStore((s) => s.setActiveCabinet);
   const addCabinet = useProjectStore((s) => s.addCabinet);
+  const groups = useMemo(() => {
+    if (!project || !activeJobId) return [];
+    const c = jobContent(project, activeJobId);
+    const out: Array<{ key: string; title: string; items: ProjectCabinet[] }> = [];
+    const used = new Set<string>();
+    const take = (key: string, title: string, items: ProjectCabinet[]) => {
+      items.forEach((x) => used.add(x.id));
+      if (items.length > 0) out.push({ key, title, items });
+    };
+    for (const sp of c.spaces) for (const w of sp.walls) take(w.id, c.spaces.length > 1 ? `${sp.name} · ${w.name}` : w.name, c.cabinets.filter((x) => x.wallId === w.id && !x.groupId));
+    for (const comp of c.compositions) take(comp.id, comp.name, c.cabinets.filter((x) => x.groupId === comp.id));
+    take('loose', out.length > 0 ? 'Tek dolaplar' : '', c.cabinets.filter((x) => !used.has(x.id)));
+    return out;
+  }, [project, activeJobId]);
 
   return (
     <nav aria-label="Dolaplar" className="w-52 shrink-0 h-full overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-bg)] flex flex-col">
@@ -23,27 +40,32 @@ function CabinetList({ activeId }: { activeId: string | undefined }) {
         <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] pl-1">Dolaplar</span>
         <AddCabinetMenu label="Ekle" onAdd={(t) => addCabinet(t)} />
       </div>
-      <ul className="p-1.5 flex flex-col gap-0.5">
-        {cabinets.map((c) => {
-          const Icon = CABINET_TYPE_ICONS[c.type];
-          const active = c.id === activeId;
-          return (
-            <li key={c.id}>
-              <button onClick={() => setActiveCabinet(c.id)} aria-current={active}
-                className={`w-full text-left flex items-start gap-2 px-2 py-1.5 rounded-md text-xs transition-colors ${
-                  active ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]' : 'text-[var(--color-text)] hover:bg-[var(--color-bg-hover)]/60'
-                }`}>
-                <Icon size={14} className="mt-0.5 shrink-0 opacity-70" />
-                <span className="min-w-0">
-                  <span className="font-mono font-semibold">{c.code}</span>
-                  {c.quantity > 1 && <span className="ml-1 opacity-70">×{c.quantity}</span>}
-                  <span className="block truncate opacity-80">{c.name}</span>
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      {groups.map((g) => (
+        <div key={g.key} className="flex flex-col">
+          {g.title && <p className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-dim)] truncate">{g.title}</p>}
+          <ul className="px-1.5 pb-1 flex flex-col gap-0.5">
+            {g.items.map((c) => {
+              const Icon = CABINET_TYPE_ICONS[c.type];
+              const active = c.id === activeId;
+              return (
+                <li key={c.id}>
+                  <button onClick={() => setActiveCabinet(c.id)} aria-current={active}
+                    className={`w-full text-left flex items-start gap-2 px-2 py-1.5 rounded-md text-xs transition-colors ${
+                      active ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]' : 'text-[var(--color-text)] hover:bg-[var(--color-bg-hover)]/60'
+                    }`}>
+                    <Icon size={14} className="mt-0.5 shrink-0 opacity-70" />
+                    <span className="min-w-0">
+                      <span className="font-mono font-semibold">{c.code}</span>
+                      {c.quantity > 1 && <span className="ml-1 opacity-70">×{c.quantity}</span>}
+                      <span className="block truncate opacity-80">{c.name}</span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
     </nav>
   );
 }
@@ -83,7 +105,7 @@ function EditorWorkspace({ cabinet }: { cabinet: ProjectCabinet }) {
 
 export default function EditorPage() {
   const cabinet = useActiveCabinet();
-  const hasAny = useProjectStore((s) => (s.project?.cabinets.length ?? 0) > 0);
+  const hasAny = useProjectStore((s) => s.project?.cabinets.some((c) => c.jobId === s.activeJobId) ?? false);
   const addCabinet = useProjectStore((s) => s.addCabinet);
 
   return (
@@ -92,8 +114,8 @@ export default function EditorPage() {
       {cabinet && hasAny ? (
         <EditorWorkspace key={cabinet.id} cabinet={cabinet} />
       ) : (
-        <EmptyState icon={<PenTool size={32} />} title="Projede dolap yok"
-          text="Gardırop, kitaplık, ayakkabılık gibi bağımsız mobilyaları ya da mutfak dolaplarını buradan ekleyin. Mutfakta duvar ölçüsünden otomatik yerleşim için Duvar Yerleşimi sayfasını kullanın."
+        <EmptyState icon={<PenTool size={32} />} title="Bu işte henüz dolap yok"
+          text="Dolaplar ilk adımda oluşur: mutfakta öneriyi uygulayın, duvar dolabında alanı çizip dolabı oluşturun, bağımsız ünitede çizin. İsterseniz buradan tek dolap da ekleyebilirsiniz."
           action={<AddCabinetMenu onAdd={(t) => addCabinet(t)} />} />
       )}
     </div>

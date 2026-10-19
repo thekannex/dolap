@@ -12,6 +12,9 @@ import type { ComputedCabinet } from '../../../core/engine/compute-cabinet';
 import { hasRails, jointsOf } from '../../../core/engine/compute-cabinet';
 import { boxesOverlap, compositionBounds, detectBoxContent, boxContentLabel } from '../../../core/layout/composition';
 import { formatNumber } from '../../../core/utils/format';
+import type { Wall } from '../../../core/models/project';
+import { WALL_SHAPE_TYPES, wallHeightOf } from '../../../core/layout/wall-fit';
+import { obstacleInfo } from '../wall-layout/obstacle-types';
 
 export interface Rect { x: number; y: number; w: number; h: number }
 
@@ -43,8 +46,10 @@ function snap(v: number, candidates: number[], tol: number): number {
   return best;
 }
 
-export default function ComposerCanvas({ boxes, computedById, selectedId, onSelect, onCommit, onDraw, onDelete, onNudge, selectedCell, onSelectCell, onInteriorCommit }: {
+export default function ComposerCanvas({ boxes, computedById, selectedId, onSelect, onCommit, onDraw, onDelete, onNudge, selectedCell, onSelectCell, onInteriorCommit, wall }: {
   boxes: ProjectCabinet[];
+  /** Duvara oturtulmuş dolapta duvar ve şekli arka planda çizilir. */
+  wall?: Wall | null;
   computedById: Map<string, ComputedCabinet>;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
@@ -60,8 +65,10 @@ export default function ComposerCanvas({ boxes, computedById, selectedId, onSele
   const [drag, setDrag] = useState<Drag | null>(null);
 
   const bounds = compositionBounds(boxes);
-  const wsW = Math.max(bounds.width + 1200, 3200);
-  const wsH = Math.max(bounds.height + 700, 2700);
+  const wallW = wall?.effectiveWidth ?? 0;
+  const wallH = wall ? wallHeightOf(wall) : 0;
+  const wsW = Math.max(bounds.width + 1200, 3200, wallW + 600);
+  const wsH = Math.max(bounds.height + 700, 2700, wallH + 300);
   const pad = 260;
   const fs = Math.max(26, Math.min(wsW, wsH * 1.4) / 70);
   const zp = useZoomPan({ x: -pad, y: -pad, w: wsW + pad * 2, h: wsH + pad * 1.6 }, svgRef);
@@ -243,6 +250,31 @@ export default function ComposerCanvas({ boxes, computedById, selectedId, onSele
       {[500, 1000, 1500, 2000, 2500].filter((v) => v < wsH).map((v) => (
         <text key={v} x={-fs * 0.4} y={SY(v)} textAnchor="end" dominantBaseline="middle" fontSize={fs * 0.7} fill="#a1a1aa" fontFamily="var(--font-mono)">{v}</text>
       ))}
+
+      {/* Duvar ve şekli (kolon, kiriş, çıkıntı, pencere…) */}
+      {wall && (
+        <g pointerEvents="none">
+          <rect x={0} y={SY(wallH)} width={wallW} height={wallH} fill="#f5f5f4" fillOpacity={0.6} stroke="#a8a29e" strokeWidth={fs * 0.12} strokeDasharray={`${fs * 0.6},${fs * 0.3}`} />
+          <text x={wallW} y={SY(wallH) - fs * 0.5} textAnchor="end" fontSize={fs * 0.75} fill="#78716c">{wall.name} · {formatNumber(wallW)} × {formatNumber(wallH)}</text>
+          {wall.obstacles.map((o) => {
+            const shape = WALL_SHAPE_TYPES.has(o.type);
+            const opening = o.type === 'window' || o.type === 'door';
+            if (!shape && !opening && o.type !== 'pipe') return null;
+            return (
+              <g key={o.id}>
+                <rect x={o.x} y={SY(o.y + o.height)} width={o.width} height={o.height}
+                  fill={opening ? '#bae6fd' : o.type === 'recess' ? 'none' : '#d6d3d1'} fillOpacity={opening ? 0.35 : 0.75}
+                  stroke={opening ? '#0284c7' : '#78716c'} strokeWidth={fs * 0.1} strokeDasharray={o.type === 'recess' ? `${fs * 0.5},${fs * 0.3}` : undefined} />
+                {o.width > fs * 3 && o.height > fs * 2 && (
+                  <text x={o.x + o.width / 2} y={SY(o.y + o.height) + fs * 1.3} textAnchor="middle" fontSize={fs * 0.7} fill="#57534e">
+                    {obstacleInfo(o.type).label}{o.depth > 0 && !opening ? ` ${o.depth}` : ''}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </g>
+      )}
 
       {boxes.map((b) => {
         const draft = draftFor(b.id);

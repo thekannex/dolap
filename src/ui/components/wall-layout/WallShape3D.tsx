@@ -280,7 +280,7 @@ export default function WallShape3D({ wall }: { wall: Wall }) {
               <p className="text-[11px] text-[var(--color-text-dim)] -mt-1">Yenileme, bu dolapta elle yaptığınız değişiklikleri siler.</p>
               <Button size="sm" disabled={cabinetsN + fillersN === 0} onClick={() => build(false)}>Ayrı yeni dolap olarak ekle</Button>
               <Button size="sm" variant="ghost" onClick={() => setActivePage('composer')}>
-                <ExternalLink size={13} /> Serbest çizimde düzenle
+                <ExternalLink size={13} /> Dolap düzenine geç (raf, kapak)
               </Button>
             </>
           ) : (

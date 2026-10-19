@@ -1,56 +1,24 @@
-import { useState } from 'react';
-import { ArrowLeft, Plus, MapPin, LayoutPanelTop, Box } from 'lucide-react';
+import { ArrowLeft, Plus, MapPin } from 'lucide-react';
 import { useUIStore } from '../../../stores/ui-store';
 import { useActiveWall, useProjectStore } from '../../../stores/project-store';
 import WallMeasurementForm from './WallMeasurementForm';
 import ObstacleEditor from './ObstacleEditor';
 import WallPlanPanel from './WallPlanPanel';
 import WallLayoutView from './WallLayoutView';
-import WallShape3D from './WallShape3D';
+import WallPicker from './WallPicker';
 import { Button, EmptyState } from '../shared/ui';
 
-function WallPicker({ activeId }: { activeId: string | undefined }) {
-  const spaces = useProjectStore((s) => s.project?.spaces ?? []);
-  const setActiveWall = useProjectStore((s) => s.setActiveWall);
-  const setActiveSpace = useProjectStore((s) => s.setActiveSpace);
-  const addWall = useProjectStore((s) => s.addWall);
-  const activeSpaceId = useProjectStore((s) => s.activeSpaceId);
-
-  const options = spaces.flatMap((s) => s.walls.map((w) => ({ spaceId: s.id, wallId: w.id, label: `${s.name} · ${w.name}` })));
-
-  return (
-    <div className="flex gap-2 items-end">
-      <label className="flex flex-col gap-1 flex-1 min-w-0">
-        <span className="text-xs text-[var(--color-text-muted)]">Duvar</span>
-        <select value={activeId ?? ''} onChange={(e) => {
-          const o = options.find((x) => x.wallId === e.target.value);
-          if (o) { setActiveSpace(o.spaceId); setActiveWall(o.wallId); }
-        }}
-          className="w-full bg-[var(--color-bg-input)] border border-[var(--color-border)] rounded-md px-2 py-1.5 text-sm focus:border-[var(--color-border-focus)] focus:outline-none">
-          {options.map((o) => <option key={o.wallId} value={o.wallId}>{o.label}</option>)}
-        </select>
-      </label>
-      <Button size="sm" onClick={() => addWall(activeSpaceId)} title="Bu mekâna yeni duvar ekle"><Plus size={14} /> Yeni duvar</Button>
-    </div>
-  );
-}
-
+/** Mutfak işi, 1. adım: duvar ölçüsü, cihazlar ve otomatik alt/üst dolap önerisi. */
 export default function WallLayoutPage() {
   const setActivePage = useUIStore((s) => s.setActivePage);
   const addWall = useProjectStore((s) => s.addWall);
   const wall = useActiveWall();
-  const [tab, setTab] = useState<'front' | 'shape'>('front');
 
   if (!wall) {
     return (
       <EmptyState icon={<MapPin size={32} />} title="Henüz duvar yok"
-        text="Mutfak gibi duvara dayalı işlerde duvar ölçüsünü girin; program dolapları otomatik yerleştirir. Bağımsız mobilya için duvar gerekmez."
-        action={
-          <div className="flex gap-2">
-            <Button variant="primary" onClick={() => addWall(null)}><Plus size={15} /> Duvar ekle</Button>
-            <Button onClick={() => setActivePage('editor')}>Dolaplara git</Button>
-          </div>
-        } />
+        text="Mutfağın duvar ölçüsünü girin; program alt ve üst dolapları otomatik yerleştirir. L ya da U mutfakta her duvarı ayrı ekleyin."
+        action={<Button variant="primary" onClick={() => addWall(null)}><Plus size={15} /> Duvar ekle</Button>} />
     );
   }
 
@@ -66,15 +34,7 @@ export default function WallLayoutPage() {
         <ObstacleEditor wall={wall} />
       </aside>
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        <div role="tablist" aria-label="Duvar görünümü" className="flex gap-1 px-3 pt-2 border-b border-[var(--color-border)] bg-[var(--color-bg-card)]">
-          {([['front', 'Önden yerleşim', LayoutPanelTop], ['shape', 'Duvar şekli ve dolap (3D)', Box]] as const).map(([val, label, Icon]) => (
-            <button key={val} role="tab" aria-selected={tab === val} onClick={() => setTab(val)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-t-md border-b-2 -mb-px transition-colors ${tab === val ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}`}>
-              <Icon size={13} /> {label}
-            </button>
-          ))}
-        </div>
-        {tab === 'front' ? <WallLayoutView wall={wall} /> : <WallShape3D key={wall.id} wall={wall} />}
+        <WallLayoutView wall={wall} />
       </div>
     </div>
   );

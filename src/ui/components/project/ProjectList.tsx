@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Upload, FolderOpen, Copy, Download, Trash2, Ruler, CookingPot, Shirt, Loader2 } from 'lucide-react';
+import { Plus, Upload, FolderOpen, Copy, Download, Trash2, Loader2, Ruler } from 'lucide-react';
 import { listProjects, saveProject, deleteProject } from '../../../core/persistence/db';
 import type { SavedProject } from '../../../core/persistence/db';
 import { exportProjectJSON, importProjectJSON } from '../../../core/persistence/json-io';
 import { normalizeProject } from '../../../core/project/project-factory';
 import type { ProjectKind } from '../../../core/project/project-factory';
+import { JOB_KINDS } from '../../../core/project/jobs';
+import { JOB_ICONS, firstStep } from '../../navigation';
 import { formatDateTime, safeFileName } from '../../../core/utils/format';
 import { useProjectStore } from '../../../stores/project-store';
 import { useUIStore } from '../../../stores/ui-store';
@@ -12,10 +14,6 @@ import { openWithoutSaving } from '../../../stores/autosave';
 import { pickTextFile, saveText } from '../../lib/files';
 import { Button, Card, TextInput } from '../shared/ui';
 
-const PROJECT_KINDS: Array<{ value: ProjectKind; title: string; text: string; icon: typeof Ruler }> = [
-  { value: 'kitchen', title: 'Mutfak', text: 'Duvar ölçüsünden alt ve üst dolapları otomatik yerleştirir.', icon: CookingPot },
-  { value: 'furniture', title: 'Bağımsız mobilya', text: 'Gardırop, kitaplık, ayakkabılık, şifonyer ya da tek bir dolap.', icon: Shirt },
-];
 
 function NewProjectForm({ onCancel }: { onCancel?: () => void }) {
   const newProject = useProjectStore((s) => s.newProject);
@@ -29,15 +27,16 @@ function NewProjectForm({ onCancel }: { onCancel?: () => void }) {
     if (!name.trim()) return;
     setNewProjectRequested(false);
     newProject(name.trim(), customer.trim(), kind);
-    if (kind === 'furniture') setActivePage('editor');
+    setActivePage(firstStep(kind));
   };
 
   return (
     <Card title="Yeni proje">
       <form className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3"
         onSubmit={(e) => { e.preventDefault(); submit(); }}>
-        <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Proje türü">
-          {PROJECT_KINDS.map(({ value, title, text, icon: Icon }) => (
+        <p className="sm:col-span-2 text-xs text-[var(--color-text-muted)]">İlk işi seçin; aynı projeye sonradan başka işler (kiler, TV ünitesi…) de eklenir.</p>
+        <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-2" role="radiogroup" aria-label="İlk iş">
+          {JOB_KINDS.map(({ value, label: title, text }) => { const Icon = JOB_ICONS[value]; return (
             <button key={value} type="button" role="radio" aria-checked={kind === value} onClick={() => setKind(value)}
               className={`flex gap-3 items-start text-left rounded-lg border p-3 transition-colors ${
                 kind === value ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/5' : 'border-[var(--color-border)] hover:border-[var(--color-text-dim)]'
@@ -48,10 +47,10 @@ function NewProjectForm({ onCancel }: { onCancel?: () => void }) {
                 <span className="block text-xs text-[var(--color-text-muted)]">{text}</span>
               </span>
             </button>
-          ))}
+          ); })}
         </div>
         <TextInput label="Proje adı" value={name} onChange={setName} autoFocus
-          placeholder={kind === 'kitchen' ? 'Örn: Yılmaz Mutfak' : 'Örn: Yılmaz Yatak Odası Gardırop'} />
+          placeholder="Örn: Yılmaz Ev" />
         <TextInput label="Müşteri" value={customer} onChange={setCustomer} placeholder="Örn: Ayşe Yılmaz" />
         <div className="sm:col-span-2 flex justify-end gap-2">
           {onCancel && <Button onClick={onCancel}>Vazgeç</Button>}

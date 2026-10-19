@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Project, Space, Wall, Obstacle } from '../core/models/project';
+import type { Composition, JobKind, Project, Space, Wall, Obstacle } from '../core/models/project';
 import { applyBoxContent, boxContentLabel, checkSharing, detectBoxContent, COMPOSITION_TEMPLATES } from '../core/layout/composition';
 import type { BoxContent } from '../core/layout/composition';
 import { fitBoxContent } from '../core/layout/wall-fit';
@@ -9,7 +9,9 @@ import type { PlannedModule } from '../core/layout/module-planner';
 import {
   applyTypePreset, createProjectCabinet, nextCabinetCode, rowForType, CABINET_TYPE_LABELS, DEFAULT_WIDTHS,
 } from '../core/engine/cabinet-factory';
-import { createProject, createWall, effectiveWallWidth, nextWallName, normalizeProject } from '../core/project/project-factory';
+import { createJobEntities, createProject, createWall, effectiveWallWidth, nextWallName, normalizeProject } from '../core/project/project-factory';
+import { nextJobName } from '../core/project/jobs';
+import { interiorFromCabinet } from '../core/engine/interior';
 import type { ProjectKind } from '../core/project/project-factory';
 
 type ProjectInfo = Pick<Project, 'name' | 'customerName' | 'customerPhone' | 'address' | 'notes'>;
@@ -20,11 +22,20 @@ export interface ProjectStore {
   activeWallId: string | null;
   activeCabinetId: string | null;
   activeCompositionId: string | null;
+  /** Açık iş; sayfalar bu işin duvar, çizim ve dolaplarıyla çalışır. */
+  activeJobId: string | null;
 
   newProject: (name: string, customerName: string, kind?: ProjectKind) => void;
   openProject: (project: Project) => void;
   closeProject: () => void;
   updateProjectInfo: (updates: Partial<ProjectInfo>) => void;
+
+  /** Yeni iş ekler ve açar; kimliğini döndürür. */
+  addJob: (kind: JobKind, name?: string) => string | null;
+  renameJob: (id: string, name: string) => void;
+  /** İşi ve işe bağlı mekân, çizim ve dolapları siler. */
+  removeJob: (id: string) => void;
+  setActiveJob: (id: string) => void;
 
   setActiveSpace: (id: string) => void;
   setActiveWall: (id: string) => void;
@@ -84,6 +95,24 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
     return { project: fn(state.project) };
   });
 
+  /** İş açılınca ilk duvarı, çizimi ve dolabı seçer. */
+  const selectionFor = (p: Project, jobId: string | null) => {
+    const space = p.spaces.find((x) => x.jobId === jobId);
+    return {
+      activeJobId: jobId,
+      activeSpaceId: space?.id ?? null,
+      activeWallId: space?.walls[0]?.id ?? null,
+      activeCompositionId: p.compositions.find((c) => c.jobId === jobId)?.id ?? null,
+      activeCabinetId: p.cabinets.find((c) => c.jobId === jobId)?.id ?? null,
+    };
+  };
+  /** Duvarın bağlı olduğu iş. */
+  const jobOfWall = (p: Project, wallId: string | null | undefined) =>
+    (wallId ? p.spaces.find((x) => x.walls.some((w) => w.id === wallId))?.jobId : null) ?? get().activeJobId;
+  const jobOfComposition = (p: Project, compId: string) => p.compositions.find((c) => c.id === compId)?.jobId ?? get().activeJobId;
+  /** Kutular bölmeli kurulur: raf, kapak ve çekmece doğrudan ayarlanır. */
+  const withInterior = <T extends ProjectCabinet>(c: T): T => ({ ...c, interior: interiorFromCabinet(c) });
+
   const mapWalls = (p: Project, fn: (w: Wall) => Wall): Project => ({
     ...p,
     spaces: p.spaces.map((s) => ({ ...s, walls: s.walls.map(fn) })),
@@ -95,34 +124,52 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
     activeWallId: null,
     activeCabinetId: null,
     activeCompositionId: null,
+    activeJobId: null,
 
     newProject: (name, customerName, kind = 'kitchen') => {
-      const spaceId = uid();
-      const wallId = uid();
-      const project = createProject({ id: uid(), spaceId, wallId, name, customerName, now: new Date().toISOString(), kind });
-      set({
-        project,
-        activeSpaceId: kind === 'kitchen' ? spaceId : null,
-        activeWallId: kind === 'kitchen' ? wallId : null,
-        activeCabinetId: null,
-      });
+      const project = createProject({ id: uid(), spaceId: uid(), wallId: uid(), jobId: uid(), compositionId: uid(), name, customerName, now: new Date().toISOString(), kind });
+      set({ project, ...selectionFor(project, project.jobs[0].id) });
     },
 
     openProject: (raw) => {
       const project = normalizeProject(raw);
-      const firstSpace = project.spaces[0];
-      set({
-        project,
-        activeSpaceId: firstSpace?.id ?? null,
-        activeWallId: firstSpace?.walls[0]?.id ?? null,
-        activeCabinetId: project.cabinets[0]?.id ?? null,
-        activeCompositionId: project.compositions[0]?.id ?? null,
-      });
+      set({ project, ...selectionFor(project, project.jobs[0]?.id ?? null) });
     },
 
-    closeProject: () => set({ project: null, activeSpaceId: null, activeWallId: null, activeCabinetId: null, activeCompositionId: null }),
+    closeProject: () => set({ project: null, activeSpaceId: null, activeWallId: null, activeCabinetId: null, activeCompositionId: null, activeJobId: null }),
 
     updateProjectInfo: (updates) => mutate((p) => ({ ...p, ...updates })),
+
+    addJob: (kind, name) => {
+      const { project } = get();
+      if (!project) return null;
+      const n = name?.trim() || nextJobName(kind, project.jobs.map((j) => j.name));
+      const e = createJobEntities(kind, n, { jobId: uid(), spaceId: uid(), wallId: uid(), compositionId: uid() });
+      const next = { ...project, jobs: [...project.jobs, e.job], spaces: [...project.spaces, ...e.spaces], compositions: [...project.compositions, ...e.compositions] };
+      set({ project: next, ...selectionFor(next, e.job.id) });
+      return e.job.id;
+    },
+
+    renameJob: (id, name) => mutate((p) => ({ ...p, jobs: p.jobs.map((j) => (j.id === id ? { ...j, name } : j)) })),
+
+    removeJob: (id) => {
+      const { project, activeJobId } = get();
+      if (!project) return;
+      const next = {
+        ...project,
+        jobs: project.jobs.filter((j) => j.id !== id),
+        spaces: project.spaces.filter((x) => x.jobId !== id),
+        compositions: project.compositions.filter((c) => c.jobId !== id),
+        cabinets: project.cabinets.filter((c) => c.jobId !== id),
+      };
+      set({ project: next, ...(activeJobId === id ? selectionFor(next, next.jobs[0]?.id ?? null) : {}) });
+    },
+
+    setActiveJob: (id) => {
+      const { project, activeJobId } = get();
+      if (!project || id === activeJobId) return;
+      set(selectionFor(project, id));
+    },
 
     setActiveSpace: (id) => set({ activeSpaceId: id }),
     setActiveWall: (id) => set({ activeWallId: id }),
@@ -130,7 +177,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
 
     addSpace: (name, type, ceilingHeight) => mutate((p) => ({
       ...p,
-      spaces: [...p.spaces, { id: uid(), name, type, ceilingHeight, walls: [] }],
+      spaces: [...p.spaces, { id: uid(), name, type, ceilingHeight, walls: [], jobId: get().activeJobId }],
     })),
 
     updateSpace: (id, updates) => mutate((p) => ({
@@ -155,9 +202,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
       const { project } = get();
       if (!project) return null;
       let spaces = project.spaces;
-      let space = spaces.find((s) => s.id === spaceId) ?? spaces[0];
+      const jobId = get().activeJobId;
+      let space = spaces.find((s) => s.id === spaceId) ?? spaces.find((s) => s.jobId === jobId);
       if (!space) {
-        space = { id: uid(), name: 'Oda', type: 'room', ceilingHeight: 2500, walls: [] };
+        space = { id: uid(), name: project.jobs.find((j) => j.id === jobId)?.name ?? 'Oda', type: 'room', ceilingHeight: 2500, walls: [], jobId };
         spaces = [...spaces, space];
       }
       const target = space;
@@ -209,13 +257,18 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
       const { project } = get();
       if (!project) return null;
       const id = uid();
+      const { activeJobId, activeWallId } = get();
+      const job = project.jobs.find((j) => j.id === activeJobId);
+      // Mutfak işinde dolap açık duvara eklenir; diğer işlerde duvarsız (tek dolap)
+      const wallId = opts.wallId !== undefined ? opts.wallId : job?.kind === 'kitchen' && jobOfWall(project, activeWallId) === activeJobId ? activeWallId : null;
       const cabinet = createProjectCabinet({
         id,
         type,
         width: opts.width ?? DEFAULT_WIDTHS[type],
         code: nextCabinetCode(project.cabinets.map((c) => c.code)),
-        wallId: opts.wallId ?? null,
+        wallId,
       });
+      cabinet.jobId = wallId ? jobOfWall(project, wallId) : activeJobId;
       set({ project: { ...project, cabinets: [...project.cabinets, cabinet] }, activeCabinetId: id });
       return id;
     },
@@ -292,6 +345,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
           if (m.type === 'appliance') continue;
           const type: CabinetType = m.type === 'filler' ? 'filler' : row === 'wall' ? 'wall' : 'base';
           const cab = createProjectCabinet({ id: uid(), type, width: m.width, code: nextCabinetCode(codes()), wallId, x: m.x });
+          cab.jobId = jobOfWall(project, wallId);
           if (row === 'wall' && type === 'filler') {
             cab.depth = 330;
             cab.row = 'wall';
@@ -308,8 +362,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
       const { project } = get();
       if (!project) return null;
       const id = uid();
-      const n = name ?? `Kompozisyon ${project.compositions.length + 1}`;
-      set({ project: { ...project, compositions: [...project.compositions, { id, name: n }] }, activeCompositionId: id });
+      const jobId = get().activeJobId;
+      const n = name ?? `Çizim ${project.compositions.filter((c) => c.jobId === jobId).length + 1}`;
+      const comp: Composition = { id, name: n, jobId };
+      set({ project: { ...project, compositions: [...project.compositions, comp] }, activeCompositionId: id });
       return id;
     },
 
@@ -345,9 +401,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
         x: box.x,
         elevation: box.elevation,
         doorHingeSide: 'both' as const,
+        jobId: jobOfComposition(project, groupId),
       }, content);
       cab.name = `${boxContentLabel(content)} ${box.width}`;
-      set({ project: { ...project, cabinets: [...project.cabinets, cab] }, activeCabinetId: id });
+      set({ project: { ...project, cabinets: [...project.cabinets, withInterior(cab)] }, activeCabinetId: id });
       return id;
     },
 
@@ -371,7 +428,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
       cabinets: p.cabinets.map((c) => {
         if (c.id !== id) return c;
         const prev = detectBoxContent(c);
-        const next = applyBoxContent(c, content);
+        const next = withInterior(applyBoxContent(c, content));
         if (c.name === `${boxContentLabel(prev)} ${c.width}`) next.name = `${boxContentLabel(content)} ${c.width}`;
         return next;
       }),
@@ -389,12 +446,12 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
         const cab = applyBoxContent({
           ...base, height: b.height, depth: b.depth, groupId, x: b.x, elevation: b.elevation,
           plinthHeight: b.plinthHeight ?? 0, shareLeft: Boolean(b.shareLeft), shareBottom: Boolean(b.shareBottom),
-          doorHingeSide: 'both' as const,
+          doorHingeSide: 'both' as const, jobId: jobOfComposition(project, groupId),
         }, b.content);
         cab.legHeight = b.legHeight ?? 0;
         if (b.inset) cab.doorOverlayType = 'inset';
-        if (b.interior) cab.interior = b.interior();
-        cab.name = b.interior ? `Bölmeli kutu ${b.width}` : `${boxContentLabel(b.content)} ${b.width}`;
+        cab.interior = b.interior ? b.interior() : interiorFromCabinet(cab);
+        cab.name = `${boxContentLabel(b.content)} ${b.width}`;
         added.push(cab);
       }
       cabinets = [...cabinets, ...added];
@@ -409,6 +466,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
       if (!wall) return null;
       const existing = replaceId ? project.compositions.find((c) => c.id === replaceId) : undefined;
       const id = existing?.id ?? uid();
+      const jobId = existing?.jobId ?? jobOfWall(project, wallId);
       let cabinets = project.cabinets.filter((c) => c.groupId !== id);
       const added: ProjectCabinet[] = [];
       for (const b of boxes) {
@@ -416,20 +474,20 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
         const code = nextCabinetCode([...cabinets, ...added].map((c) => c.code));
         if (b.kind === 'filler') {
           const base = createProjectCabinet({ id: cid, type: 'filler', width: b.width, code });
-          added.push({ ...base, height: b.height, depth: b.depth, groupId: id, x: b.x, elevation: b.elevation, backOffset: b.backOffset, name: `Dolgu ${b.width}` });
+          added.push({ ...base, height: b.height, depth: b.depth, groupId: id, x: b.x, elevation: b.elevation, backOffset: b.backOffset, name: `Dolgu ${b.width}`, jobId });
           continue;
         }
         const content = fitBoxContent(b);
         const base = createProjectCabinet({ id: cid, type: 'custom', width: b.width, code });
         const cab = applyBoxContent({
           ...base, height: b.height, depth: b.depth, groupId: id, x: b.x, elevation: b.elevation,
-          backOffset: b.backOffset, doorHingeSide: 'both' as const,
+          backOffset: b.backOffset, doorHingeSide: 'both' as const, jobId,
         }, content);
         cab.name = `${boxContentLabel(content)} ${b.width}${b.backOffset > 0 ? ' (sığ)' : ''}`;
-        added.push(cab);
+        added.push(withInterior(cab));
       }
       cabinets = [...cabinets, ...added];
-      const comp = { id, name: existing?.name ?? `${wall.name} dolabı`, wallId, fit };
+      const comp: Composition = { id, name: existing?.name ?? `${wall.name} dolabı`, wallId, fit, jobId };
       const compositions = existing
         ? project.compositions.map((c) => (c.id === id ? comp : c))
         : [...project.compositions, comp];
@@ -474,16 +532,27 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
 
 /** Aktif dolabı döndürür; seçili dolap yoksa ilk dolabı. */
 export function useActiveCabinet(): ProjectCabinet | undefined {
-  return useProjectStore((s) => s.project?.cabinets.find((c) => c.id === s.activeCabinetId) ?? s.project?.cabinets[0]);
+  return useProjectStore((s) => {
+    const inJob = (c: ProjectCabinet) => !s.activeJobId || c.jobId === s.activeJobId;
+    const active = s.project?.cabinets.find((c) => c.id === s.activeCabinetId);
+    return active && inJob(active) ? active : s.project?.cabinets.find(inJob);
+  });
 }
 
+/** Açık iş. */
+export function useActiveJob() {
+  return useProjectStore((s) => s.project?.jobs.find((j) => j.id === s.activeJobId) ?? s.project?.jobs[0]);
+}
+
+/** Açık işin seçili duvarı; seçili duvar başka işteyse işin ilk duvarı. */
 export function useActiveWall(): Wall | undefined {
   return useProjectStore((s) => {
-    if (!s.project || !s.activeWallId) return undefined;
-    for (const space of s.project.spaces) {
+    if (!s.project) return undefined;
+    const spaces = s.project.spaces.filter((x) => !s.activeJobId || x.jobId === s.activeJobId);
+    for (const space of spaces) {
       const wall = space.walls.find((w) => w.id === s.activeWallId);
       if (wall) return wall;
     }
-    return undefined;
+    return spaces.find((x) => x.walls.length > 0)?.walls[0];
   });
 }

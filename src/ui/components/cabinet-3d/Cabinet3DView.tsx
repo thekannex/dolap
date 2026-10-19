@@ -5,7 +5,9 @@ import { Box as BoxIcon, Pencil } from 'lucide-react';
 import { useUIStore } from '../../../stores/ui-store';
 import { layoutScene, COUNTERTOP_THICKNESS, COUNTERTOP_OVERHANG, ON_LEGS } from '../../../core/layout/scene-layout';
 import type { SceneLayout } from '../../../core/layout/scene-layout';
-import { useProjectStore, useActiveCabinet } from '../../../stores/project-store';
+import { useProjectStore } from '../../../stores/project-store';
+import { projectForJob } from '../../../core/project/jobs';
+import JobScopeSelect from '../shared/JobScopeSelect';
 import type { ProjectCabinet } from '../../../core/models/cabinet';
 import { Button, EmptyState, Toggle } from '../shared/ui';
 import { Board, CabinetModel, SinkModel, WallModel } from './models';
@@ -61,17 +63,26 @@ function SetScene({ layout, cabinets, showFronts, activeId, onSelect }: {
 }
 
 export default function Cabinet3DView() {
-  const cabinet = useActiveCabinet();
   const project = useProjectStore((s) => s.project);
-  const cabinets = useMemo(() => project?.cabinets ?? [], [project]);
+  const activeCabinetId = useProjectStore((s) => s.activeCabinetId);
+  const scopeRaw = useUIStore((s) => s.scopeJobId);
+  const scope = project?.jobs.some((j) => j.id === scopeRaw) ? scopeRaw : null;
+  const scoped = useMemo(() => (project ? projectForJob(project, scope) : null), [project, scope]);
+  const cabinets = useMemo(() => scoped?.cabinets ?? [], [scoped]);
+  const cabinet = cabinets.find((c) => c.id === activeCabinetId) ?? cabinets[0];
   const setActiveCabinet = useProjectStore((s) => s.setActiveCabinet);
   const setActivePage = useUIStore((s) => s.setActivePage);
   const [showFronts, setShowFronts] = useState(true);
   const [mode, setMode] = useState<'single' | 'set'>(cabinets.length > 1 ? 'set' : 'single');
-  const layout = useMemo(() => (project ? layoutScene(project) : null), [project]);
+  const layout = useMemo(() => (scoped ? layoutScene(scoped) : null), [scoped]);
 
   if (!cabinet || !layout) {
-    return <EmptyState icon={<BoxIcon size={32} />} title="Gösterilecek dolap yok" text="Projeye dolap ekleyince burada 3 boyutlu görebilirsiniz." />;
+    return (
+      <div className="flex-1 flex flex-col">
+        <div className="px-4 py-2 border-b border-[var(--color-border)] bg-[var(--color-bg-card)]"><JobScopeSelect /></div>
+        <EmptyState icon={<BoxIcon size={32} />} title="Gösterilecek dolap yok" text="Bu kapsamda dolap yok. Bir işe dolap ekleyince burada 3 boyutlu görebilirsiniz." />
+      </div>
+    );
   }
 
   const size = Math.max(cabinet.width, cabinet.height, cabinet.depth) / S;
@@ -91,6 +102,7 @@ export default function Cabinet3DView() {
             </button>
           ))}
         </div>
+        <JobScopeSelect />
         <select value={cabinet.id} onChange={(e) => setActiveCabinet(e.target.value)} aria-label="Dolap"
           className="bg-[var(--color-bg-input)] border border-[var(--color-border)] rounded-md px-2 py-1 text-sm">
           {cabinets.map((c) => <option key={c.id} value={c.id}>{c.code} · {c.name}</option>)}

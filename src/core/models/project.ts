@@ -13,11 +13,24 @@ export interface Project {
   cabinets: ProjectCabinet[];
   /** Serbest çizimle kurulan mobilya kompozisyonları. */
   compositions: Composition[];
+  /** Projedeki işler: mutfak, duvar dolabı (kiler, gömme gardırop), bağımsız ünite. */
+  jobs: Job[];
+}
+
+/** İşin türü; hangi adımların (sayfaların) açılacağını belirler. */
+export type JobKind = 'kitchen' | 'built_in' | 'furniture';
+
+export interface Job {
+  id: string;
+  name: string;
+  kind: JobKind;
 }
 
 export interface Composition {
   id: string;
   name: string;
+  /** Bağlı olduğu iş. */
+  jobId?: string | null;
   /** Duvara oturtulmuş dolapsa o duvar; kutuların x'i duvarın solundan ölçülür. */
   wallId?: string | null;
   /** Duvar şekline göre üretildiyse çizilen alan ve seçenekler (yeniden üretmek için). */
@@ -27,6 +40,8 @@ export interface Composition {
 export interface Space {
   id: string;
   name: string;
+  /** Bağlı olduğu iş. */
+  jobId?: string | null;
   type: string;
   ceilingHeight: number;
   walls: Wall[];

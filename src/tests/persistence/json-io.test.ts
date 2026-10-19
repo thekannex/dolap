@@ -7,7 +7,7 @@ import { bandLabel, formatMoney, formatNumber, safeFileName, formatDate } from '
 describe('proje dosyası', () => {
   it('dışa aktarılan proje aynen geri okunur', () => {
     const p = createProject({ id: 'p', spaceId: 's', wallId: 'w', name: 'Mutfak', customerName: 'Ali', now: '2026-01-01T00:00:00.000Z' });
-    p.cabinets = [createProjectCabinet({ id: 'c', type: 'base', width: 600, code: 'M01', wallId: 'w' })];
+    p.cabinets = [{ ...createProjectCabinet({ id: 'c', type: 'base', width: 600, code: 'M01', wallId: 'w' }), jobId: 'p-job' }];
     const { project, version } = importProjectJSON(exportProjectJSON(p));
     expect(version).toBe('2.0');
     expect(project).toEqual(p);

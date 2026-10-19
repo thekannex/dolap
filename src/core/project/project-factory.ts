@@ -1,5 +1,6 @@
-import type { Project, Space, Wall } from '../models/project';
+import type { Composition, Job, JobKind, Project, Space, Wall } from '../models/project';
 import { normalizeCabinet } from '../engine/cabinet-factory';
+import { migrateJobs } from './jobs';
 
 export function effectiveWallWidth(w: Pick<Wall, 'widthLeft' | 'widthCenter' | 'widthRight' | 'installGap'>): number {
   return Math.min(w.widthLeft, w.widthCenter, w.widthRight) - w.installGap;
@@ -18,8 +19,8 @@ export function createWall(id: string, spaceId: string, name: string): Wall {
   return wall;
 }
 
-/** Mutfak projesi duvar ölçüsüyle başlar; bağımsız mobilya projesi duvarsız başlar. */
-export type ProjectKind = 'kitchen' | 'furniture';
+/** Projenin ilk işinin türü. */
+export type ProjectKind = JobKind;
 
 /** Mekândaki duvar adlarına göre kullanılmamış ilk harfi verir: A Duvarı, B Duvarı... */
 export function nextWallName(existing: string[]): string {
@@ -30,14 +31,34 @@ export function nextWallName(existing: string[]): string {
   return `Duvar ${existing.length + 1}`;
 }
 
+/**
+ * Yeni işin başlangıç kayıtları: mutfak ve duvar dolabı bir mekân + A Duvarı ile,
+ * bağımsız ünite boş bir çizimle (kompozisyon) başlar.
+ */
+export function createJobEntities(kind: JobKind, name: string, ids: { jobId: string; spaceId: string; wallId: string; compositionId: string }): {
+  job: Job; spaces: Space[]; compositions: Composition[];
+} {
+  const job: Job = { id: ids.jobId, name, kind };
+  if (kind === 'furniture') {
+    return { job, spaces: [], compositions: [{ id: ids.compositionId, name, jobId: ids.jobId }] };
+  }
+  const space: Space = {
+    id: ids.spaceId, name, type: kind === 'kitchen' ? 'kitchen' : 'room', ceilingHeight: 2500, jobId: ids.jobId,
+    walls: [createWall(ids.wallId, ids.spaceId, 'A Duvarı')],
+  };
+  return { job, spaces: [space], compositions: [] };
+}
+
 export function createProject(params: {
   id: string; spaceId: string; wallId: string; name: string; customerName: string; now: string; kind?: ProjectKind;
+  jobId?: string; compositionId?: string; jobName?: string;
 }): Project {
-  const space: Space = {
-    id: params.spaceId, name: 'Mutfak', type: 'kitchen', ceilingHeight: 2500,
-    walls: [createWall(params.wallId, params.spaceId, 'A Duvarı')],
-  };
-  const spaces = (params.kind ?? 'kitchen') === 'kitchen' ? [space] : [];
+  const kind = params.kind ?? 'kitchen';
+  const jobName = params.jobName ?? (kind === 'kitchen' ? 'Mutfak' : kind === 'built_in' ? 'Kiler' : 'TV ünitesi');
+  const first = createJobEntities(kind, jobName, {
+    jobId: params.jobId ?? `${params.id}-job`, spaceId: params.spaceId, wallId: params.wallId,
+    compositionId: params.compositionId ?? `${params.id}-comp`,
+  });
   return {
     id: params.id,
     name: params.name,
@@ -47,15 +68,16 @@ export function createProject(params: {
     notes: '',
     createdAt: params.now,
     updatedAt: params.now,
-    spaces,
+    spaces: first.spaces,
     cabinets: [],
-    compositions: [],
+    compositions: first.compositions,
+    jobs: [first.job],
   };
 }
 
 /** Eski sürüm ya da dışarıdan gelen proje verisini güncel yapıya getirir. */
 export function normalizeProject(raw: Partial<Project> & { id: string }, now: string = new Date().toISOString()): Project {
-  return {
+  const base = {
     name: 'Adsız Proje',
     customerName: '',
     customerPhone: '',
@@ -65,7 +87,11 @@ export function normalizeProject(raw: Partial<Project> & { id: string }, now: st
     updatedAt: now,
     spaces: [],
     compositions: [],
+    jobs: [],
     ...raw,
     cabinets: (raw.cabinets ?? []).map((c) => normalizeCabinet(c)),
   } as Project;
+  // İşi olmayan eski kayıtlar işlere dağıtılır; kimlikler proje kimliğinden türetilir (tekrar açınca aynı)
+  let seq = 0;
+  return migrateJobs(base, () => `${raw.id}-job-${++seq}`);
 }

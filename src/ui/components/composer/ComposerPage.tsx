@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus, Trash2, Shapes, Pencil, Box as BoxIcon, ArrowRight, ArrowUp, Link2, Unlink2, LayoutTemplate, Columns3 } from 'lucide-react';
+import { Plus, Trash2, Shapes, Pencil, Box as BoxIcon, ArrowRight, ArrowUp, Link2, Unlink2, LayoutTemplate } from 'lucide-react';
 import { useProjectStore } from '../../../stores/project-store';
 import { useUIStore } from '../../../stores/ui-store';
 import { useProjectComputation } from '../../hooks/use-cabinet-calculations';
@@ -74,18 +74,16 @@ function BoxPanel({ box, group, selectedCell, onSelectCell }: {
         }}><Trash2 size={14} /></Button>
       </div>
 
-      <Section title={box.interior ? 'Bölmeler ve gözler' : 'İçerik'}>
-        {box.interior ? (
-          <InteriorEditor cabinet={box} selected={selectedCell} onSelect={onSelectCell} />
-        ) : (
-          <>
-            <ContentPicker value={content} onChange={(v) => setBoxContent(box.id, v)} />
-            <Button size="sm" onClick={() => updateCabinet(box.id, { interior: interiorFromCabinet(box) })}>
-              <Columns3 size={13} /> Bölmelere ayır (kapak, çekmece, raf karışık)
-            </Button>
-          </>
-        )}
-      </Section>
+      {box.type !== 'filler' && (
+        <Section title="Raflar, kapaklar ve bölmeler">
+          {/* Eski (bölmesiz) kutu da bölmeli gösterilir; ilk değişiklikte bölmeli kaydedilir */}
+          <InteriorEditor cabinet={box.interior ? box : { ...box, interior: interiorFromCabinet(box) }} selected={selectedCell} onSelect={onSelectCell} />
+          <details className="rounded-md border border-[var(--color-border)]">
+            <summary className="px-2 py-1.5 text-xs cursor-pointer text-[var(--color-text-muted)]">Hızlı doldur (bölmeleri sıfırlar)</summary>
+            <div className="p-2"><ContentPicker value={content} onChange={(v) => setBoxContent(box.id, v)} /></div>
+          </details>
+        </Section>
+      )}
 
       <Section title="Ölçü ve konum">
         <div className="grid grid-cols-3 gap-2">
@@ -218,7 +216,11 @@ export default function ComposerPage() {
   const [newDepth, setNewDepth] = useState(400);
   const [cellSel, setCellSel] = useState<{ boxId: string; ref: CellRef } | null>(null);
 
-  const composition = project.compositions.find((c) => c.id === activeId) ?? project.compositions[0];
+  const activeJobId = useProjectStore((s) => s.activeJobId);
+  const job = project.jobs.find((j) => j.id === activeJobId);
+  const jobComps = useMemo(() => project.compositions.filter((c) => c.jobId === activeJobId), [project.compositions, activeJobId]);
+  const composition = jobComps.find((c) => c.id === activeId) ?? jobComps[0];
+  const wall = composition?.wallId ? project.spaces.flatMap((sp) => sp.walls).find((w) => w.id === composition.wallId) ?? null : null;
   const group = useMemo(() => project.cabinets.filter((c) => composition && c.groupId === composition.id), [project.cabinets, composition]);
   const computedById = useMemo(
     () => new Map<string, ComputedCabinet>(computation?.cabinets.map((c) => [c.cabinet.id, c.computed]) ?? []),
@@ -229,10 +231,20 @@ export default function ComposerPage() {
   const updateCabinet = useProjectStore((s) => s.updateCabinet);
 
   if (!composition) {
+    if (job?.kind === 'built_in') {
+      return (
+        <EmptyState icon={<Shapes size={32} />} title="Önce dolabı oluşturun"
+          text="Duvar dolabı, duvarın şekline göre üretilir. 'Duvar ve şekil' adımında kolon, kiriş ve çıkıntıları girip dolap alanını çizin, sonra 'Dolabı oluştur'a basın. Kutular burada düzenlenir."
+          action={<div className="flex gap-2">
+            <Button variant="primary" onClick={() => setActivePage('wall-shape')}>Duvar ve şekil adımına git</Button>
+            <Button onClick={() => addComposition()}><Plus size={15} /> Boş çizimle başla</Button>
+          </div>} />
+      );
+    }
     return (
-      <EmptyState icon={<Shapes size={32} />} title="Serbest çizim"
-        text="TV ünitesi, kitaplık duvarı, gardırop gibi birden çok kutudan oluşan mobilyaları önden görünüşte çizin ya da ölçüyle kurun. Çizdiğiniz her kutu bir dolap olarak kesim listesine ve teklife girer."
-        action={<Button variant="primary" onClick={() => addComposition()}><Plus size={15} /> Kompozisyon oluştur</Button>} />
+      <EmptyState icon={<Shapes size={32} />} title="Üniteyi çizin"
+        text="TV ünitesi, kitaplık, gardırop gibi birden çok kutudan oluşan üniteleri önden görünüşte çizin, ölçüyle kurun ya da hazır şablondan başlayın. Her kutu bir dolap olarak kesim listesine ve teklife girer."
+        action={<Button variant="primary" onClick={() => addComposition()}><Plus size={15} /> Çizime başla</Button>} />
     );
   }
 
@@ -243,11 +255,11 @@ export default function ComposerPage() {
     <div className="flex-1 flex overflow-hidden">
       <aside className="w-60 shrink-0 h-full overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-bg-card)] p-3 flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">Kompozisyonlar</span>
-          <Button size="sm" variant="ghost" onClick={() => addComposition()} aria-label="Yeni kompozisyon" title="Yeni kompozisyon"><Plus size={14} /></Button>
+          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">Çizimler</span>
+          <Button size="sm" variant="ghost" onClick={() => addComposition()} aria-label="Yeni çizim" title="Bu işe yeni çizim ekle"><Plus size={14} /></Button>
         </div>
         <ul className="flex flex-col gap-0.5">
-          {project.compositions.map((c) => (
+          {jobComps.map((c) => (
             <li key={c.id}>
               <button onClick={() => setActiveComposition(c.id)} aria-current={c.id === composition.id}
                 className={`w-full text-left px-2 py-1.5 rounded-md text-sm transition-colors ${
@@ -261,10 +273,10 @@ export default function ComposerPage() {
         </ul>
 
         <div className="border-t border-[var(--color-border)] pt-3 flex flex-col gap-2">
-          <TextInput label="Kompozisyon adı" value={composition.name} onChange={(v) => renameComposition(composition.id, v)} />
+          <TextInput label="Çizimin adı" value={composition.name} onChange={(v) => renameComposition(composition.id, v)} />
           <Button size="sm" variant="danger" className="self-start" onClick={async () => {
-            if (await confirm({ title: 'Kompozisyon silinsin mi?', message: `"${composition.name}" ve içindeki ${group.length} kutu silinecek.`, confirmLabel: 'Sil', danger: true })) removeComposition(composition.id);
-          }}><Trash2 size={13} /> Kompozisyonu sil</Button>
+            if (await confirm({ title: 'Çizim silinsin mi?', message: `"${composition.name}" ve içindeki ${group.length} kutu silinecek.`, confirmLabel: 'Sil', danger: true })) removeComposition(composition.id);
+          }}><Trash2 size={13} /> Çizimi sil</Button>
         </div>
 
         <div className="border-t border-[var(--color-border)] pt-3 flex flex-col gap-2">
@@ -287,6 +299,7 @@ export default function ComposerPage() {
         </div>
         <div className="flex-1 p-3 overflow-hidden">
           <ComposerCanvas
+            wall={wall}
             boxes={group}
             computedById={computedById}
             selectedId={selected?.id ?? null}

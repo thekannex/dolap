@@ -23,10 +23,15 @@ export function useCabinetCalculations(cab: CabinetState | ProjectCabinet): Comp
   }), [cab, all, settings.sheetWidth, settings.sheetHeight, settings.bodyBand, settings.frontBand]);
 }
 
-/** Açık projenin tamamının hesabı (kesim listesi, plakalar, maliyet). */
-export function useProjectComputation(): ProjectComputation | null {
+/** Açık projenin hesabı (kesim listesi, plakalar, maliyet); jobId verilirse yalnızca o iş. */
+export function useProjectComputation(jobId: string | null = null): ProjectComputation | null {
   const cabinets = useProjectStore((s) => s.project?.cabinets);
   const spaces = useProjectStore((s) => s.project?.spaces);
   const settings = useSettingsStore((s) => s.settings);
-  return useMemo(() => (cabinets ? computeProject({ cabinets, spaces }, settings) : null), [cabinets, spaces, settings]);
+  return useMemo(() => {
+    if (!cabinets) return null;
+    const cabs = jobId ? cabinets.filter((c) => c.jobId === jobId) : cabinets;
+    const sps = jobId ? spaces?.filter((s) => s.jobId === jobId) : spaces;
+    return computeProject({ cabinets: cabs, spaces: sps }, settings);
+  }, [cabinets, spaces, settings, jobId]);
 }
