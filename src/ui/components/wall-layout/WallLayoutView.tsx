@@ -95,6 +95,17 @@ export default function WallLayoutView({ wall }: { wall: Wall }) {
           {wall.obstacles.map((o) => {
             const info = obstacleInfo(o.type);
             const isAppliance = o.type === 'appliance';
+            if (info.shape) {
+              return (
+                <g key={o.id}>
+                  <rect x={pad + o.x} y={floorY - o.y - o.height} width={o.width} height={o.height}
+                    fill={o.type === 'recess' ? 'var(--color-bg)' : '#d6d3d1'} opacity={0.8} stroke="#78716c" strokeWidth={3}
+                    strokeDasharray={o.type === 'recess' ? '14,8' : undefined} />
+                  <text x={pad + o.x + o.width / 2} y={floorY - o.y - o.height / 2} textAnchor="middle" dominantBaseline="middle"
+                    fill="#57534e" fontSize={Math.min(44, Math.max(24, o.width / 8))}>{info.label} {o.depth > 0 ? `· ${o.depth}` : ''}</text>
+                </g>
+              );
+            }
             return (
               <g key={o.id}>
                 <rect x={pad + o.x} y={floorY - o.y - o.height} width={o.width} height={o.height}

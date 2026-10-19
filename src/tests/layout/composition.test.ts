@@ -131,7 +131,7 @@ describe('kompozisyon geneli', () => {
     const a = box('a', 0, 0, 600, 2000);
     const c = box('c', 600, 1600, 1800, 400);
     const l = layoutScene({ spaces: [], cabinets: [a, c], compositions: [{ id: 'g', name: 'TV duvarı' }] });
-    expect(l.walls).toEqual([{ id: 'g', name: 'TV duvarı', x: 0, width: 2400, height: 2500 }]);
+    expect(l.walls).toEqual([{ id: 'g', name: 'TV duvarı', x: 0, width: 2400, height: 2500, obstacles: [] }]);
     expect(l.placements.find((p) => p.cabinetId === 'c')).toMatchObject({ x: 600, elevation: 1600 });
     expect(l.looseStart).toBeNull();
   });

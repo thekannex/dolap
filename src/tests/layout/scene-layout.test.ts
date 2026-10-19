@@ -74,3 +74,18 @@ describe('layoutScene', () => {
     expect(layoutScene(p).looseStart).toBe(0);
   });
 });
+
+describe('layoutScene — duvara oturtulmuş dolap', () => {
+  it('kutular kendi duvarında, kolon önündeki kutunun arkası kolona dayanır', () => {
+    const p = createProject({ id: 'p', spaceId: 's', wallId: 'w1', name: 'A', customerName: '', now: '2026-01-01T00:00:00.000Z' });
+    p.compositions = [{ id: 'g', name: 'Gardırop', wallId: 'w1' }];
+    const a = { ...cab('a', 'custom', 1000, null), groupId: 'g', x: 0, elevation: 0, depth: 600 };
+    const b = { ...cab('b', 'custom', 400, null), groupId: 'g', x: 1000, elevation: 0, depth: 300, backOffset: 300 };
+    p.cabinets = [a, b];
+    const l = layoutScene(p);
+    expect(l.walls).toHaveLength(1);
+    expect(l.walls[0].id).toBe('w1');
+    expect(l.placements.find((x) => x.cabinetId === 'b')).toMatchObject({ x: 1000, back: 300, depth: 300 });
+    expect(l.depth).toBe(600);
+  });
+});

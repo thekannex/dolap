@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import type { Project, Space, Wall, Obstacle } from '../core/models/project';
 import { applyBoxContent, boxContentLabel, checkSharing, detectBoxContent, COMPOSITION_TEMPLATES } from '../core/layout/composition';
 import type { BoxContent } from '../core/layout/composition';
+import { fitBoxContent } from '../core/layout/wall-fit';
+import type { FitBox } from '../core/layout/wall-fit';
 import type { CabinetType, ProjectCabinet } from '../core/models/cabinet';
 import type { PlannedModule } from '../core/layout/module-planner';
 import {
@@ -37,7 +39,8 @@ export interface ProjectStore {
   updateWall: (id: string, updates: Partial<Wall>) => void;
   removeWall: (id: string) => void;
 
-  addObstacle: (wallId: string, obstacle: Omit<Obstacle, 'id'>) => void;
+  /** Engeli ekler, kimliğini döndürür. */
+  addObstacle: (wallId: string, obstacle: Omit<Obstacle, 'id'>) => string;
   updateObstacle: (wallId: string, obstacleId: string, updates: Partial<Obstacle>) => void;
   removeObstacle: (wallId: string, obstacleId: string) => void;
 
@@ -61,6 +64,11 @@ export interface ProjectStore {
   applyTemplate: (groupId: string, templateId: string) => number;
   /** Kompozisyonda mümkün olan tüm bitişik kutularda ortak dikme ve tabla kullan / kullanma. */
   setSharingForGroup: (groupId: string, on: boolean) => void;
+  /**
+   * Duvar şekline göre hesaplanmış kutulardan dolap kurar. replaceId verilirse o kompozisyonun kutuları yenilenir.
+   * Kompozisyonun kimliğini döndürür.
+   */
+  createFittedComposition: (wallId: string, boxes: FitBox[], fit: NonNullable<import('../core/models/project').Composition['fit']>, replaceId?: string | null) => string | null;
 
   getActiveSpace: () => Space | undefined;
   getActiveWall: () => Wall | undefined;
@@ -171,17 +179,23 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
       if (!project) return;
       const spaces = project.spaces.map((s) => ({ ...s, walls: s.walls.filter((w) => w.id !== id) }));
       const cabinets = project.cabinets.map((c) => (c.wallId === id ? { ...c, wallId: null, x: null } : c));
+      // Duvara oturtulmuş dolaplar serbest kompozisyon olarak kalır
+      const compositions = project.compositions.map((c) => (c.wallId === id ? { ...c, wallId: null } : c));
       // Silinen duvar seçiliyse kalan ilk duvara geç
       const fallback = spaces.flatMap((s) => s.walls.map((w) => ({ spaceId: s.id, wallId: w.id })))[0];
       set({
-        project: { ...project, spaces, cabinets },
+        project: { ...project, spaces, cabinets, compositions },
         ...(activeWallId === id ? { activeWallId: fallback?.wallId ?? null, activeSpaceId: fallback?.spaceId ?? null } : {}),
       });
     },
 
-    addObstacle: (wallId, obstacle) => mutate((p) => mapWalls(p, (w) => (
-      w.id === wallId ? { ...w, obstacles: [...w.obstacles, { ...obstacle, id: uid(), wallId }] } : w
-    ))),
+    addObstacle: (wallId, obstacle) => {
+      const id = uid();
+      mutate((p) => mapWalls(p, (w) => (
+        w.id === wallId ? { ...w, obstacles: [...w.obstacles, { ...obstacle, id, wallId }] } : w
+      )));
+      return id;
+    },
 
     updateObstacle: (wallId, obstacleId, updates) => mutate((p) => mapWalls(p, (w) => (
       w.id === wallId ? { ...w, obstacles: w.obstacles.map((o) => (o.id === obstacleId ? { ...o, ...updates } : o)) } : w
@@ -386,6 +400,41 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
       cabinets = [...cabinets, ...added];
       set({ project: { ...project, cabinets }, activeCabinetId: added[0]?.id ?? null });
       return added.length;
+    },
+
+    createFittedComposition: (wallId, boxes, fit, replaceId) => {
+      const { project } = get();
+      if (!project) return null;
+      const wall = project.spaces.flatMap((s) => s.walls).find((w) => w.id === wallId);
+      if (!wall) return null;
+      const existing = replaceId ? project.compositions.find((c) => c.id === replaceId) : undefined;
+      const id = existing?.id ?? uid();
+      let cabinets = project.cabinets.filter((c) => c.groupId !== id);
+      const added: ProjectCabinet[] = [];
+      for (const b of boxes) {
+        const cid = uid();
+        const code = nextCabinetCode([...cabinets, ...added].map((c) => c.code));
+        if (b.kind === 'filler') {
+          const base = createProjectCabinet({ id: cid, type: 'filler', width: b.width, code });
+          added.push({ ...base, height: b.height, depth: b.depth, groupId: id, x: b.x, elevation: b.elevation, backOffset: b.backOffset, name: `Dolgu ${b.width}` });
+          continue;
+        }
+        const content = fitBoxContent(b);
+        const base = createProjectCabinet({ id: cid, type: 'custom', width: b.width, code });
+        const cab = applyBoxContent({
+          ...base, height: b.height, depth: b.depth, groupId: id, x: b.x, elevation: b.elevation,
+          backOffset: b.backOffset, doorHingeSide: 'both' as const,
+        }, content);
+        cab.name = `${boxContentLabel(content)} ${b.width}${b.backOffset > 0 ? ' (sığ)' : ''}`;
+        added.push(cab);
+      }
+      cabinets = [...cabinets, ...added];
+      const comp = { id, name: existing?.name ?? `${wall.name} dolabı`, wallId, fit };
+      const compositions = existing
+        ? project.compositions.map((c) => (c.id === id ? comp : c))
+        : [...project.compositions, comp];
+      set({ project: { ...project, cabinets, compositions }, activeCompositionId: id, activeCabinetId: added[0]?.id ?? null });
+      return id;
     },
 
     setSharingForGroup: (groupId, on) => mutate((p) => {

@@ -138,4 +138,6 @@ export interface ProjectCabinet extends CabinetState {
   shareLeft: boolean;
   /** Alt tabla alttaki kutunun üst tablasıyla ortak (bu kutunun tabanı kesilmez). */
   shareBottom: boolean;
+  /** Kutunun arkası duvardan bu kadar önde (kolon/çıkıntı önündeki sığ kutu). */
+  backOffset?: number;
 }

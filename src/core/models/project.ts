@@ -18,6 +18,10 @@ export interface Project {
 export interface Composition {
   id: string;
   name: string;
+  /** Duvara oturtulmuş dolapsa o duvar; kutuların x'i duvarın solundan ölçülür. */
+  wallId?: string | null;
+  /** Duvar şekline göre üretildiyse çizilen alan ve seçenekler (yeniden üretmek için). */
+  fit?: { region: { x: number; y: number; width: number; height: number; depth: number }; topHeight: number; maxModule: number } | null;
 }
 
 export interface Space {

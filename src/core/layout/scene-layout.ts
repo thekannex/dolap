@@ -1,5 +1,5 @@
 import type { CabinetType, ProjectCabinet } from '../models/cabinet';
-import type { Project } from '../models/project';
+import type { Obstacle, Project } from '../models/project';
 import { placeWallCabinets } from './wall-elevation';
 
 /** Mutfak dolaplarının ayak yüksekliği (mm). */
@@ -35,6 +35,8 @@ export interface ScenePlacement {
   width: number;
   height: number;
   depth: number;
+  /** Kutunun arkasının duvardan uzaklığı (kolon önündeki sığ kutu). */
+  back: number;
   countertop: boolean;
 }
 
@@ -44,6 +46,8 @@ export interface SceneWall {
   x: number;
   width: number;
   height: number;
+  /** Duvarın şekli ve engelleri (yalnızca gerçek duvarlarda). */
+  obstacles: Obstacle[];
 }
 
 export interface SceneLayout {
@@ -65,6 +69,10 @@ export function layoutScene(project: Pick<Project, 'spaces' | 'cabinets'> & Part
   const placements: ScenePlacement[] = [];
   const walls: SceneWall[] = [];
   let cursor = 0;
+  const wallIds = new Set(project.spaces.flatMap((s) => s.walls.map((w) => w.id)));
+  // Duvara oturtulmuş kompozisyon → duvar
+  const fittedOn = new Map<string, string>();
+  for (const c of project.compositions ?? []) if (c.wallId && wallIds.has(c.wallId)) fittedOn.set(c.id, c.wallId);
 
   const push = (cab: ProjectCabinet, x: number, copy: number, wallHeight: number) => {
     placements.push({
@@ -75,41 +83,50 @@ export function layoutScene(project: Pick<Project, 'spaces' | 'cabinets'> & Part
       width: cab.width,
       height: cab.height,
       depth: cab.depth,
+      back: 0,
       countertop: WITH_COUNTERTOP.has(cab.type) && cab.row !== 'wall',
     });
   };
 
   for (const space of project.spaces) {
     for (const wall of space.walls) {
-      const onWall = project.cabinets.filter((c) => c.wallId === wall.id);
+      const onWall = project.cabinets.filter((c) => c.wallId === wall.id && !c.groupId);
       const wallHeight = Math.max(wall.heightLeft, wall.heightCenter, wall.heightRight);
       const placed = placeWallCabinets(onWall);
-      if (onWall.length === 0) continue;
+      // Duvara oturtulmuş kompozisyonlar: kutular duvarın solundan ölçülü, arkaları çıkıntıların önünde
+      const fitted = project.cabinets.filter((c) => c.groupId && fittedOn.get(c.groupId) === wall.id);
+      if (onWall.length === 0 && fitted.length === 0) continue;
       const byId = new Map(onWall.map((c) => [c.id, c]));
       for (const p of placed) push(byId.get(p.cabinetId)!, cursor + p.x, p.copy, wallHeight);
-      const width = Math.max(wall.effectiveWidth, ...placed.map((p) => p.x + p.width));
-      walls.push({ id: wall.id, name: `${space.name} · ${wall.name}`, x: cursor, width, height: wallHeight });
+      for (const b of fitted) {
+        placements.push({
+          key: `${b.id}-0`, cabinetId: b.id, x: cursor + (b.x ?? 0), elevation: b.elevation ?? 0,
+          width: b.width, height: b.height, depth: b.depth, back: b.backOffset ?? 0, countertop: false,
+        });
+      }
+      const width = Math.max(wall.effectiveWidth, ...placed.map((p) => p.x + p.width), ...fitted.map((b) => (b.x ?? 0) + b.width));
+      walls.push({ id: wall.id, name: `${space.name} · ${wall.name}`, x: cursor, width, height: wallHeight, obstacles: wall.obstacles });
       cursor += width + WALL_GAP;
     }
   }
 
   // Serbest çizim kompozisyonları: kutular çizildikleri konum ve yükseklikte
   for (const comp of project.compositions ?? []) {
+    if (fittedOn.has(comp.id)) continue;
     const boxes = project.cabinets.filter((c) => c.groupId === comp.id);
     if (boxes.length === 0) continue;
     for (const b of boxes) {
       placements.push({
         key: `${b.id}-0`, cabinetId: b.id, x: cursor + (b.x ?? 0), elevation: b.elevation ?? 0,
-        width: b.width, height: b.height, depth: b.depth, countertop: false,
+        width: b.width, height: b.height, depth: b.depth, back: b.backOffset ?? 0, countertop: false,
       });
     }
     const width = Math.max(...boxes.map((b) => (b.x ?? 0) + b.width));
     const height = Math.max(2500, ...boxes.map((b) => (b.elevation ?? 0) + b.height));
-    walls.push({ id: comp.id, name: comp.name, x: cursor, width, height });
+    walls.push({ id: comp.id, name: comp.name, x: cursor, width, height, obstacles: [] });
     cursor += width + WALL_GAP;
   }
 
-  const wallIds = new Set(project.spaces.flatMap((s) => s.walls.map((w) => w.id)));
   const loose = project.cabinets.filter((c) => !c.groupId && (!c.wallId || !wallIds.has(c.wallId)));
   const looseStart = loose.length > 0 ? cursor : null;
   for (const cab of loose) {
@@ -125,6 +142,6 @@ export function layoutScene(project: Pick<Project, 'spaces' | 'cabinets'> & Part
     placements.reduce((m, p) => Math.max(m, p.elevation + p.height + (p.countertop ? COUNTERTOP_THICKNESS : 0)), 0),
     ...walls.map((w) => w.height),
   );
-  const depth = placements.reduce((m, p) => Math.max(m, p.depth + (p.countertop ? COUNTERTOP_OVERHANG : 0)), 0);
+  const depth = placements.reduce((m, p) => Math.max(m, p.back + p.depth + (p.countertop ? COUNTERTOP_OVERHANG : 0)), 0);
   return { placements, walls, looseStart, width, height, depth };
 }
