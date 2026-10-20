@@ -2,6 +2,7 @@
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import { readFileSync } from 'fs'
 import { defineConfig } from 'vite'
 import type { Plugin } from 'vite'
 
@@ -13,9 +14,13 @@ const cspPlugin = (): Plugin => ({
   transformIndexHtml: (html) => html.replace('<head>', `<head>\n    <meta http-equiv="Content-Security-Policy" content="${CSP}" />`),
 })
 
+// Sürüm numarası package.json'dan derlemeye gömülür (başlıkta görünür)
+const APP_VERSION: string = JSON.parse(readFileSync(path.resolve(import.meta.dirname, 'package.json'), 'utf8')).version
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss(), cspPlugin()],
+  define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
   resolve: {
     alias: { '@': path.resolve(import.meta.dirname, './src') },
   },

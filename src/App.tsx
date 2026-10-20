@@ -146,6 +146,7 @@ export default function App() {
         <div className="flex items-center gap-2 min-w-0">
           <img src="./favicon.svg" alt="" className="w-6 h-6" />
           <span className="text-sm font-bold tracking-widest text-[var(--color-accent)]">DOLAP</span>
+          <span className="text-[10px] font-mono font-medium text-[var(--color-text-dim)] rounded px-1 py-px border border-[var(--color-border)] -ml-0.5" title={`Dolap ${__APP_VERSION__}`}>v{__APP_VERSION__}</span>
           {projectName && (
             <span className="text-sm text-[var(--color-text-muted)] truncate max-w-56" title={projectName}>/ {projectName}</span>
           )}
