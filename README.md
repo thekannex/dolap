@@ -6,14 +6,16 @@ Mutfak dolaplarının (alt, üst, boy, çekmeceli, evye) yanında gardırop, kit
 
 ## Kullanıcı için
 
-### Kurulum
+### Çalıştırma (kurulum gerekmez)
 
-`release/` klasöründe iki dosya bulunur:
+Program tek bir dosyadır: `Dolap-Tasinabilir-<sürüm>.exe`. Kurulum yapılmaz; dosyayı istediğiniz bir klasöre (ya da USB belleğe) koyup çift tıklayın.
 
-| Dosya | Ne zaman |
-|---|---|
-| `Dolap-Kurulum-1.10.0.exe` | Normal kurulum. Masaüstü ve Başlat menüsü kısayolu oluşturur. |
-| `Dolap-Tasinabilir-1.10.0.exe` | Kurulumsuz. Çift tıklayınca çalışır, USB bellekten de açılabilir. |
+- **İlk açılışta** dosyanın yanında `Dolap-Dosyalari` klasörü oluşur ve program bir kez buraya hazırlanır (birkaç saniye, ilerleme çubuğuyla). **Sonraki açılışlar** hazırlık yapmadan doğrudan başlar.
+- **Projeler de bu klasörde** (`Dolap-Dosyalari\veriler`) saklanır. Programı başka bir bilgisayara ya da USB belleğe taşırken `.exe` dosyasını ve `Dolap-Dosyalari` klasörünü **birlikte** taşıyın; projeleriniz de gelir.
+- Daha önceki sürümlerde bu bilgisayarda kaydedilmiş projeler ilk açılışta yeni klasöre kopyalanır.
+- Yeni sürümü eskisinin yanına koyup açtığınızda program yeniden hazırlanır, eski sürümün program klasörü silinir; projeler kalır.
+- Dosya yazılamayan bir yerdeyse (CD, salt okunur klasör) program geçici klasörde çalışır ve projeler kullanıcı klasörüne kaydedilir.
+- Açılırken "Dolap açılıyor…" ekranı görünür.
 
 Uygulama imzasız olduğu için Windows ilk açılışta "Windows bilgisayarınızı korudu" uyarısı gösterebilir. **Ek bilgi → Yine de çalıştır** ile açılır.
 
@@ -46,7 +48,7 @@ Her adımda yapılan değişiklik **geri alınabilir**: üst çubuktaki oklar, C
 ### Kayıt ve yedek
 
 - Projeler her değişiklikte otomatik kaydedilir ve uygulama açılınca son proje açılır.
-- Veriler bu bilgisayarda, kullanıcı klasöründe saklanır. Klasörü **Dosya → Verilerin bulunduğu klasörü aç** menüsünden açabilirsiniz.
+- Veriler programın yanındaki `Dolap-Dosyalari\veriler` klasöründe saklanır. Klasörü **Dosya → Verilerin bulunduğu klasörü aç** menüsünden açabilirsiniz.
 - **Yedek al** düğmesi projeyi `.dolap.json` dosyası olarak kaydeder. Başka bir bilgisayarda **Yedekten aç** ile açılır. Düzenli yedek almanız önerilir.
 
 ### Bilinmesi gerekenler
@@ -65,7 +67,7 @@ npm run dev        # tarayıcıda geliştirme sunucusu (http://localhost:5173)
 npm run app        # derleyip Electron penceresinde açar
 npm test           # birim testleri
 npm run lint
-npm run dist       # test + derleme + Windows kurulum dosyası ve taşınabilir exe (release/)
+npm run dist       # test + derleme + Windows taşınabilir exe (release/; scripts/build-portable.cjs + build/portable-launcher.nsi)
 npm run icons      # public/favicon.svg dosyasından build/icon.png üretir
 ```
 

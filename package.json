@@ -2,7 +2,7 @@
   "name": "dolap",
   "productName": "Dolap",
   "private": true,
-  "version": "1.16.0",
+  "version": "1.17.0",
   "description": "Mobilya ölçü çıkarma, kesim listesi, plaka planı ve teklif hazırlama",
   "author": "Dolap",
   "type": "module",
@@ -17,7 +17,7 @@
     "test:coverage": "vitest run --coverage",
     "app": "npm run build && npm run electron:install && electron .",
     "icons": "node scripts/make-icons.cjs",
-    "dist": "npm run test && npm run build && npm run electron:install && electron-builder --win --x64",
+    "dist": "npm run test && npm run build && npm run electron:install && electron-builder --win --x64 && node scripts/build-portable.cjs",
     "electron:install": "node node_modules/electron/install.js"
   },
   "build": {
@@ -40,34 +40,12 @@
       "icon": "build/icon.png",
       "target": [
         {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
+          "target": "dir",
           "arch": [
             "x64"
           ]
         }
       ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Dolap",
-      "installerLanguages": [
-        "tr_TR"
-      ],
-      "language": "1055",
-      "artifactName": "Dolap-Kurulum-${version}.${ext}"
-    },
-    "portable": {
-      "artifactName": "Dolap-Tasinabilir-${version}.${ext}"
     }
   },
   "devDependencies": {

@@ -1,6 +1,7 @@
 // Dolap masaüstü uygulaması — Electron ana süreci.
 // Arayüz, Vite ile derlenen dist/ klasöründen yüklenir; Node.js erişimi arayüze açılmaz.
 const { app, BrowserWindow, Menu, shell, dialog } = require('electron');
+const fs = require('node:fs');
 const path = require('node:path');
 
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
@@ -13,11 +14,65 @@ const FILE_FILTERS = {
   json: { name: 'Dolap proje yedeği', extensions: ['json'] },
 };
 
+// Taşınabilir sürüm: projeler .exe'nin yanındaki "Dolap-Dosyalari\veriler" klasöründe tutulur
+// (başlatıcı DOLAP_PORTABLE_DATA ile bildirir). Böylece .exe ile klasör birlikte taşınınca projeler de gider.
+const PORTABLE_DATA = process.env.DOLAP_PORTABLE_DATA || '';
+if (PORTABLE_DATA) {
+  try {
+    const previous = app.getPath('userData');
+    fs.mkdirSync(PORTABLE_DATA, { recursive: true });
+    // İlk açılışta bu bilgisayarda daha önce kaydedilmiş projeler taşınabilir klasöre kopyalanır
+    if (!fs.existsSync(path.join(PORTABLE_DATA, 'IndexedDB')) && fs.existsSync(path.join(previous, 'IndexedDB'))) {
+      for (const dir of ['IndexedDB', 'Local Storage']) {
+        const src = path.join(previous, dir);
+        if (fs.existsSync(src)) fs.cpSync(src, path.join(PORTABLE_DATA, dir), { recursive: true });
+      }
+    }
+    app.setPath('userData', PORTABLE_DATA);
+  } catch (err) {
+    console.error('Taşınabilir veri klasörü kullanılamadı', err);
+  }
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 }
 
 let mainWindow = null;
+let splash = null;
+
+/** Program açılırken hemen görünen küçük açılış ekranı; ana pencere hazır olunca kapanır. */
+function createSplash() {
+  splash = new BrowserWindow({
+    width: 420, height: 260, frame: false, resizable: false, movable: true, center: true,
+    show: true, skipTaskbar: false, title: 'Dolap', icon: ICON, backgroundColor: '#ffffff',
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false },
+  });
+  const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Dolap</title><style>
+    html,body{margin:0;height:100%;font-family:"Segoe UI",system-ui,sans-serif;background:#fff;color:#27272a;overflow:hidden;user-select:none}
+    body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;border:1px solid #e4e4e7;box-sizing:border-box}
+    .logo{width:64px;height:64px}
+    h1{margin:0;font-size:22px;letter-spacing:.3em;color:#ea580c;font-weight:700}
+    p{margin:0;font-size:13px;color:#71717a}
+    .bar{width:180px;height:4px;border-radius:2px;background:#f4f4f5;overflow:hidden;position:relative}
+    .bar::after{content:"";position:absolute;inset:0;width:40%;border-radius:2px;background:#ea580c;animation:k 1.1s ease-in-out infinite}
+    @keyframes k{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
+    .v{position:absolute;bottom:10px;font-size:11px;color:#a1a1aa}
+  </style></head><body>
+    <svg class="logo" viewBox="0 0 64 64"><rect x="4" y="4" width="56" height="56" rx="12" fill="#ea580c"/>
+      <rect x="16" y="14" width="32" height="38" rx="2" fill="none" stroke="#fff" stroke-width="3.5"/>
+      <line x1="32" y1="14" x2="32" y2="52" stroke="#fff" stroke-width="3"/>
+      <circle cx="28" cy="33" r="2" fill="#fff"/><circle cx="36" cy="33" r="2" fill="#fff"/></svg>
+    <h1>DOLAP</h1><p>Açılıyor…</p><div class="bar"></div><div class="v">${app.getVersion()}</div>
+  </body></html>`;
+  splash.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+  splash.on('closed', () => { splash = null; });
+}
+
+function closeSplash() {
+  if (splash && !splash.isDestroyed()) splash.destroy();
+  splash = null;
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -41,7 +96,9 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow.maximize();
     mainWindow.show();
+    closeSplash();
   });
+  mainWindow.webContents.once('did-fail-load', closeSplash);
 
   if (DEV_URL) {
     mainWindow.loadURL(DEV_URL);
@@ -123,7 +180,9 @@ function buildMenu() {
             title: 'Dolap hakkında',
             message: `Dolap ${app.getVersion()}`,
             detail: 'Mobilya ölçü çıkarma, kesim listesi, plaka planı ve teklif hazırlama.\n\n'
-              + `Projeleriniz bu bilgisayarda saklanır:\n${app.getPath('userData')}\n\n`
+              + (PORTABLE_DATA
+                ? `Taşınabilir sürüm. Projeleriniz programın yanındaki klasörde saklanır:\n${app.getPath('userData')}\n\n.exe dosyasını ve "Dolap-Dosyalari" klasörünü birlikte taşıyın.\n\n`
+                : `Projeleriniz bu bilgisayarda saklanır:\n${app.getPath('userData')}\n\n`)
               + 'Düzenli olarak "Yedek al" ile proje dosyası almanız önerilir.',
           }),
         },
@@ -140,6 +199,7 @@ app.on('second-instance', () => {
 });
 
 app.whenReady().then(() => {
+  if (!DEV_URL) createSplash();
   buildMenu();
   createWindow();
   app.on('activate', () => {
