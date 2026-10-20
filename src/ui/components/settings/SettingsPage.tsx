@@ -49,7 +49,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <Card title="Atölye bilgileri (PDF başlığında görünür)">
+          <Card title="Atölye bilgileri (PDF başlığında görünür)" tour="settings-workshop">
             <div className="p-4 flex flex-col gap-3">
               <TextInput label="Atölye / firma adı" value={settings.workshopName} onChange={(v) => set('workshopName', v)} placeholder="Örn: Usta Mobilya" />
               <TextInput label="Telefon" value={settings.workshopPhone} onChange={(v) => set('workshopPhone', v)} />
@@ -57,7 +57,7 @@ export default function SettingsPage() {
             </div>
           </Card>
 
-          <Card title="Plaka ve kesim">
+          <Card title="Plaka ve kesim" tour="settings-sheet">
             <div className="p-4 grid grid-cols-2 gap-3">
               <NumInput label="Plaka boyu" value={settings.sheetWidth} onChange={(v) => set('sheetWidth', v)} min={500} max={6000} />
               <NumInput label="Plaka eni" value={settings.sheetHeight} onChange={(v) => set('sheetHeight', v)} min={500} max={3000} />
@@ -74,7 +74,7 @@ export default function SettingsPage() {
             </div>
           </Card>
 
-          <Card title="Teklif">
+          <Card title="Teklif" tour="settings-quote">
             <div className="p-4 grid grid-cols-2 gap-3">
               <NumInput label="İşçilik (dolap başına)" value={settings.laborPerCabinet} onChange={(v) => set('laborPerCabinet', v)} max={1_000_000} suffix="₺" />
               <NumInput label="Kâr oranı" value={settings.profitPercent} onChange={(v) => set('profitPercent', v)} max={500} suffix="%" />
@@ -83,7 +83,7 @@ export default function SettingsPage() {
             </div>
           </Card>
 
-          <Card title="Levha fiyatları (tam plaka)">
+          <Card title="Levha fiyatları (tam plaka)" tour="settings-prices">
             <div className="p-4 flex flex-col gap-3">
               {(Object.keys(MATERIAL_LABELS) as PartMaterial[]).map((m) => (
                 <div key={m} className="grid grid-cols-[1fr_130px] gap-2 items-end">

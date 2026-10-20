@@ -18,6 +18,7 @@ import SettingsPage from './ui/components/settings/SettingsPage';
 import ComposerPage from './ui/components/composer/ComposerPage';
 import WallShapePage from './ui/components/wall-layout/WallShapePage';
 import { Toasts, ConfirmDialog, ErrorBoundary } from './ui/components/shared/Overlays';
+import PageTour from './ui/components/tour/PageTour';
 
 /** Tüm projeye ait sayfalar (işten bağımsız). */
 const PROJECT_PAGES: Array<{ id: PageId; label: string; icon: typeof FolderOpen }> = [
@@ -38,7 +39,7 @@ function JobSwitcher({ page }: { page: PageId }) {
   if (!job) return null;
   const Icon = JOB_ICONS[job.kind];
   return (
-    <label className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg-input)] pl-2 pr-1 py-0.5" title={jobKindInfo(job.kind).label}>
+    <label data-tour="nav-job" className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg-input)] pl-2 pr-1 py-0.5" title={jobKindInfo(job.kind).label}>
       <Icon size={14} className="text-[var(--color-accent)] shrink-0" />
       <select value={job.id} aria-label="Açık iş"
         onChange={(e) => {
@@ -94,7 +95,7 @@ function UndoButtons() {
   const { canUndo, canRedo } = useHistoryState();
   const cls = 'p-1.5 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-hover)]/60 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed';
   return (
-    <div className="flex items-center">
+    <div className="flex items-center" data-tour="undo">
       <button className={cls} disabled={!canUndo} onClick={() => undo()} title="Geri al (Ctrl+Z)" aria-label="Geri al"><Undo2 size={15} /></button>
       <button className={cls} disabled={!canRedo} onClick={() => redo()} title="Yinele (Ctrl+Y)" aria-label="Yinele"><Redo2 size={15} /></button>
     </div>
@@ -150,7 +151,7 @@ export default function App() {
         </div>
 
         <nav className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto">
-          <button onClick={() => setActivePage('projects')} className={navCls(page === 'projects')} title="Kayıtlı tüm projeler">
+          <button data-tour="nav-projects" onClick={() => setActivePage('projects')} className={navCls(page === 'projects')} title="Kayıtlı tüm projeler">
             <FolderKanban size={14} /> Projeler
           </button>
           {hasProject && (
@@ -162,29 +163,33 @@ export default function App() {
             <>
               <ChevronRight size={14} className="text-[var(--color-text-dim)] shrink-0" />
               <JobSwitcher page={page} />
-              {steps.map(({ id, label, icon: Icon, hint }, i) => (
-                <button key={id} onClick={() => setActivePage(id)} title={hint} className={navCls(page === id)}>
-                  <span className={`w-4 h-4 rounded-full text-[10px] leading-4 text-center font-bold ${page === id ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-border)] text-[var(--color-text-muted)]'}`}>{i + 1}</span>
-                  <Icon size={14} /> {label}
-                </button>
-              ))}
+              <div data-tour="nav-steps" className="flex items-center gap-1">
+                {steps.map(({ id, label, icon: Icon, hint }, i) => (
+                  <button key={id} onClick={() => setActivePage(id)} title={hint} className={navCls(page === id)}>
+                    <span className={`w-4 h-4 rounded-full text-[10px] leading-4 text-center font-bold ${page === id ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-border)] text-[var(--color-text-muted)]'}`}>{i + 1}</span>
+                    <Icon size={14} /> {label}
+                  </button>
+                ))}
+              </div>
             </>
           )}
           {hasProject && (
             <>
               <span className="w-px h-5 bg-[var(--color-border)] mx-1 shrink-0" />
-              {PROJECT_PAGES.map(({ id, label, icon: Icon }) => (
-                <button key={id} onClick={() => setActivePage(id)} className={navCls(page === id)} title="Tüm proje">
-                  <Icon size={14} /> {label}
-                </button>
-              ))}
+              <div data-tour="nav-project-pages" className="flex items-center gap-1">
+                {PROJECT_PAGES.map(({ id, label, icon: Icon }) => (
+                  <button key={id} onClick={() => setActivePage(id)} className={navCls(page === id)} title="Tüm proje">
+                    <Icon size={14} /> {label}
+                  </button>
+                ))}
+              </div>
             </>
           )}
         </nav>
 
         {hasProject && <UndoButtons />}
         <SaveIndicator />
-        <button onClick={() => setActivePage('settings')} title="Ayarlar ve fiyatlar"
+        <button data-tour="nav-settings" onClick={() => setActivePage('settings')} title="Ayarlar ve fiyatlar"
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors ${
             page === 'settings' ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)] font-semibold' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-hover)]/60'
           }`}>
@@ -210,6 +215,7 @@ export default function App() {
             {page === 'settings' && <SettingsPage />}
           </ErrorBoundary>
         )}
+        {ready && <PageTour key={page} page={page} />}
       </main>
 
       <Toasts />

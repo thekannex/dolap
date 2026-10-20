@@ -10,7 +10,7 @@ export default function WallMeasurementForm({ wall }: { wall: Wall }) {
   const minWidth = Math.min(wall.widthLeft, wall.widthCenter, wall.widthRight);
 
   return (
-    <div className="border border-[var(--color-border)] rounded-lg p-3 flex flex-col gap-3">
+    <div data-tour="wall-measure" className="border border-[var(--color-border)] rounded-lg p-3 flex flex-col gap-3">
       <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-accent)]">Saha ölçüleri</h3>
       <TextInput label="Duvar adı" value={wall.name} onChange={(v) => update({ name: v })} />
 

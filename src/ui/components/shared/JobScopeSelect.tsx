@@ -9,7 +9,7 @@ export default function JobScopeSelect() {
   if (jobs.length < 2) return null;
   const value = scope && jobs.some((j) => j.id === scope) ? scope : '';
   return (
-    <label className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
+    <label data-tour="scope" className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
       Kapsam
       <select value={value} onChange={(e) => setScope(e.target.value || null)} aria-label="Kapsam"
         className="bg-[var(--color-bg-input)] border border-[var(--color-border)] rounded-md px-2 py-1 text-sm text-[var(--color-text)]">

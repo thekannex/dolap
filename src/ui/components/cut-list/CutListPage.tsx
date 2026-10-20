@@ -127,7 +127,7 @@ export default function CutListPage() {
             <h1 className="text-xl font-bold">Kesim ve Teklif</h1>
             <JobScopeSelect />
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div data-tour="cut-exports" className="flex flex-wrap items-center gap-2">
             <Button variant="primary" disabled={busy !== null} onClick={exportWorkshop}>{spin('workshop', <FileText size={15} />)} Atölye PDF</Button>
             <Button disabled={busy !== null} onClick={exportQuote}>{spin('quote', <Receipt size={15} />)} Teklif PDF</Button>
             <Button disabled={busy !== null} onClick={exportExcel}>{spin('excel', <FileSpreadsheet size={15} />)} Excel</Button>
@@ -135,7 +135,7 @@ export default function CutListPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div data-tour="cut-stats" className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <Stat label="Dolap" value={c.totals.cabinetCount} />
           <Stat label="Parça" value={c.totals.partCount} />
           <Stat label="Plaka" value={c.totals.sheetCount} />
@@ -161,7 +161,7 @@ export default function CutListPage() {
           </details>
         )}
 
-        <div role="tablist" className="flex gap-1 border-b border-[var(--color-border)]">
+        <div data-tour="cut-tabs" role="tablist" className="flex gap-1 border-b border-[var(--color-border)]">
           {TABS.map((t) => (
             <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
               className={`px-4 py-2 text-sm -mb-px border-b-2 transition-colors ${

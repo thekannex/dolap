@@ -48,7 +48,7 @@ export default function ProjectOverview() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div data-tour="project-stats" className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <Stat label="Dolap" value={computation?.totals.cabinetCount ?? 0} />
           <Stat label="Parça" value={computation?.totals.partCount ?? 0} />
           <Stat label="Plaka" value={computation?.totals.sheetCount ?? 0} />
@@ -63,7 +63,7 @@ export default function ProjectOverview() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <Card title="Proje bilgileri" className="lg:col-span-1">
+          <Card title="Proje bilgileri" className="lg:col-span-1" tour="project-info">
             <div className="p-4 flex flex-col gap-3">
               <TextInput label="Proje adı" value={project.name} onChange={(v) => updateProjectInfo({ name: v })} />
               <TextInput label="Müşteri" value={project.customerName} onChange={(v) => updateProjectInfo({ customerName: v })} />
@@ -74,7 +74,7 @@ export default function ProjectOverview() {
           </Card>
 
           <div className="lg:col-span-2 flex flex-col gap-5">
-            <Card title={`İşler (${project.jobs.length})`}>
+            <Card title={`İşler (${project.jobs.length})`} tour="project-jobs">
               {project.jobs.length === 0 ? (
                 <p className="px-4 py-6 text-sm text-[var(--color-text-muted)]">Henüz iş yok. Aşağıdan mutfak, duvar dolabı ya da bağımsız ünite ekleyin.</p>
               ) : (
@@ -110,7 +110,7 @@ export default function ProjectOverview() {
               )}
             </Card>
 
-            <Card title="Yeni iş ekle">
+            <Card title="Yeni iş ekle" tour="project-add-job">
               <div className="p-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {JOB_KINDS.map(({ value, label, text }) => {
                   const Icon = JOB_ICONS[value];

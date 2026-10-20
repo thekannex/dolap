@@ -94,7 +94,7 @@ export default function Cabinet3DView() {
   return (
     <div className="flex-1 flex flex-col">
       <div className="flex items-center gap-4 px-4 py-2 border-b border-[var(--color-border)] bg-[var(--color-bg-card)] text-sm">
-        <div role="radiogroup" aria-label="Görünüm" className="flex rounded-md border border-[var(--color-border)] overflow-hidden">
+        <div data-tour="view-mode" role="radiogroup" aria-label="Görünüm" className="flex rounded-md border border-[var(--color-border)] overflow-hidden">
           {([['single', 'Tek dolap'], ['set', 'Tüm set']] as const).map(([val, label]) => (
             <button key={val} role="radio" aria-checked={mode === val} onClick={() => setMode(val)}
               className={`px-3 py-1 text-xs font-medium transition-colors ${mode === val ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-muted)] hover:bg-[var(--color-bg-hover)]/60'}`}>
@@ -113,7 +113,7 @@ export default function Cabinet3DView() {
           {mode === 'set' ? 'Tıkla: dolabı seç · ' : ''}Sürükle: döndür · Tekerlek: yakınlaş · Sağ tık: kaydır
         </span>
       </div>
-      <div className="flex-1 bg-gradient-to-b from-[#f4f4f5] to-[#e4e4e7]">
+      <div data-tour="view-canvas" className="flex-1 bg-gradient-to-b from-[#f4f4f5] to-[#e4e4e7]">
         {mode === 'single' ? (
           <Canvas key={`single-${cabinet.id}`} shadows camera={{ position: [size * 1.1, size * 0.9, size * 1.6], fov: 45 }}>
             <ambientLight intensity={0.6} />

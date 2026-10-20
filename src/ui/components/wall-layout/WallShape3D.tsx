@@ -129,8 +129,8 @@ export default function WallShape3D({ wall }: { wall: Wall }) {
 
   return (
     <div className="flex-1 flex overflow-hidden">
-      <div className="relative flex-1 min-w-0 bg-gradient-to-b from-[#f4f4f5] to-[#e4e4e7]">
-        <div className="absolute top-2 left-2 z-10 flex gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)]/95 p-1 shadow-sm">
+      <div data-tour="shape-canvas" className="relative flex-1 min-w-0 bg-gradient-to-b from-[#f4f4f5] to-[#e4e4e7]">
+        <div data-tour="shape-toolbar" className="absolute top-2 left-2 z-10 flex gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)]/95 p-1 shadow-sm">
           <Button size="sm" variant={tool === 'select' ? 'primary' : 'ghost'} onClick={() => setTool('select')} title="Engelleri seç ve sürükle">
             <MousePointer2 size={13} /> Seç / taşı
           </Button>
@@ -198,7 +198,7 @@ export default function WallShape3D({ wall }: { wall: Wall }) {
       </div>
 
       <aside className="w-72 shrink-0 h-full overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-bg-card)] p-3 flex flex-col gap-3">
-        <Section title="Duvar şekli">
+        <Section title="Duvar şekli" tour="shape-add">
           <div className="grid grid-cols-2 gap-1">
             {OBSTACLE_TYPES.filter((t) => t.shape).map(({ value, label, icon: Icon }) => (
               <button key={value} onClick={() => addShape(value)}
@@ -230,7 +230,7 @@ export default function WallShape3D({ wall }: { wall: Wall }) {
           )}
         </Section>
 
-        <Section title="Dolap alanı">
+        <Section title="Dolap alanı" tour="shape-region">
           <div className="flex gap-1.5">
             <Button size="sm" variant={tool === 'region' ? 'primary' : 'secondary'} onClick={() => setTool(tool === 'region' ? 'select' : 'region')}>
               <PenTool size={13} /> Duvara çiz
@@ -251,7 +251,7 @@ export default function WallShape3D({ wall }: { wall: Wall }) {
           </div>
         </Section>
 
-        <Section title="Sonuç">
+        <Section title="Sonuç" tour="shape-result">
           <p className="text-sm">
             <span className="font-semibold">{cabinetsN}</span> dolap
             {shallowN > 0 && <span className="text-[var(--color-text-muted)]"> ({shallowN} sığ)</span>}

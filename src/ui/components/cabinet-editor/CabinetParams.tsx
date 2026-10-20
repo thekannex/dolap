@@ -60,7 +60,7 @@ export default function CabinetParams({ cabinet, selectedCell, onSelectCell }: {
   ];
 
   return (
-    <aside className="w-80 shrink-0 h-full overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-bg-card)] px-4 py-3 flex flex-col">
+    <aside data-tour="editor-params" className="w-80 shrink-0 h-full overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-bg-card)] px-4 py-3 flex flex-col">
       <Section title="Kimlik">
         <div className="grid grid-cols-[80px_1fr] gap-2">
           <TextInput label="Kod" value={cabinet.code} onChange={(v) => set({ code: v.toUpperCase() })} />

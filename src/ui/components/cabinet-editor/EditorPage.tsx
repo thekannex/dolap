@@ -35,7 +35,7 @@ function CabinetList({ activeId }: { activeId: string | undefined }) {
   }, [project, activeJobId]);
 
   return (
-    <nav aria-label="Dolaplar" className="w-52 shrink-0 h-full overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-bg)] flex flex-col">
+    <nav data-tour="editor-list" aria-label="Dolaplar" className="w-52 shrink-0 h-full overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-bg)] flex flex-col">
       <div className="p-2 border-b border-[var(--color-border)] flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] pl-1">Dolaplar</span>
         <AddCabinetMenu label="Ekle" onAdd={(t) => addCabinet(t)} />
@@ -81,7 +81,7 @@ function EditorWorkspace({ cabinet }: { cabinet: ProjectCabinet }) {
     <>
       <CabinetParams cabinet={cabinet} selectedCell={cellSel} onSelectCell={setCellSel} />
       <CabinetPreview cabinet={cabinet} selectedCell={cellSel} onSelectCell={setCellSel} />
-      <aside className="w-[340px] shrink-0 h-full overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-bg-card)] p-4">
+      <aside data-tour="editor-parts" className="w-[340px] shrink-0 h-full overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-bg-card)] p-4">
         <div className="flex items-center justify-between mb-3 gap-2">
           <span className="text-xs text-[var(--color-text-muted)] font-mono truncate">
             {cabinet.code} · {computed.parts.reduce((s, p) => s + p.quantity, 0)} parça

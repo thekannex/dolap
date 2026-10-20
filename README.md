@@ -21,6 +21,8 @@ Bilgisayarda Node.js ya da başka bir program kurulu olması gerekmez; internet 
 
 ### İş akışı
 
+Her sayfanın sol alt köşesindeki **?** düğmesi o sayfayı tanıtır: alanlar sırayla vurgulanır ve balonlarda ne işe yaradıkları anlatılır. İleri / Geri düğmeleri ya da ok tuşlarıyla ilerlenir, Esc ile kapatılır; istediğiniz zaman yeniden açabilirsiniz. Henüz bakılmamış sayfalarda düğmenin üstünde turuncu bir nokta yanıp söner.
+
 1. **Projeler ve Proje**: Üst menüdeki **Projeler** sekmesi kayıtlı tüm projeleri listeler; açık proje kapanmadan buradan başka projeye geçilir (açık olan önce kaydedilir), yeni proje oluşturulur, yedekten açılır, çoğaltılır ya da silinir. **Proje** sekmesi açık projenin bilgilerini ve işlerini gösterir. Müşteri bilgilerini girin. Bir proje, aynı müşterinin birden çok **işini** taşır (örneğin mutfak + kiler + TV ünitesi); kesim listesi ve teklif hepsini birlikte ya da iş iş hesaplar. Proje sayfasından "Yeni iş ekle" ile üç türden biri seçilir. Üst menüde açık işin adı ve yalnızca o işe ait adımlar görünür; iş seçiciyle işler arasında geçilir.
 2. **Mutfak işi**
    - **1 · Duvar ve yerleşim**: Duvarın alttan, ortadan ve üstten genişliğini girin. Bulaşık makinesi, fırın gibi cihazları "Cihaz boşluğu" olarak ekleyin. **Öneriyi uygula** ile alt ve üst dolaplar otomatik yerleşir, kalan boşluğa dolgu konur.

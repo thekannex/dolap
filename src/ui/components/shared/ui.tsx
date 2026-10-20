@@ -98,9 +98,9 @@ export function Toggle({ label, checked, onChange }: { label: string; checked: b
   );
 }
 
-export function Section({ title, children, defaultOpen = true }: { title: string; children: ReactNode; defaultOpen?: boolean }) {
+export function Section({ title, children, defaultOpen = true, tour }: { title: string; children: ReactNode; defaultOpen?: boolean; tour?: string }) {
   return (
-    <details open={defaultOpen} className="group">
+    <details open={defaultOpen} className="group" data-tour={tour}>
       <summary className="flex items-center justify-between cursor-pointer text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] py-2 border-b border-[var(--color-border)] list-none">
         {title}
         <span className="text-[var(--color-text-dim)] group-open:rotate-90 transition-transform text-[10px]">▶</span>
@@ -126,9 +126,9 @@ export function Button({ variant = 'secondary', size = 'md', className = '', chi
   return <button type="button" className={`${base} ${sizes[size]} ${variants[variant]} ${className}`} {...rest}>{children}</button>;
 }
 
-export function Card({ title, actions, children, className = '' }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
+export function Card({ title, actions, children, className = '', tour }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; tour?: string }) {
   return (
-    <section className={`bg-[var(--color-bg-card)] rounded-lg border border-[var(--color-border)] overflow-hidden ${className}`}>
+    <section data-tour={tour} className={`bg-[var(--color-bg-card)] rounded-lg border border-[var(--color-border)] overflow-hidden ${className}`}>
       {(title || actions) && (
         <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between gap-3">
           <h3 className="font-semibold text-sm text-[var(--color-text)]">{title}</h3>

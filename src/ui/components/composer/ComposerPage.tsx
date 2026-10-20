@@ -253,7 +253,7 @@ export default function ComposerPage() {
 
   return (
     <div className="flex-1 flex overflow-hidden">
-      <aside className="w-60 shrink-0 h-full overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-bg-card)] p-3 flex flex-col gap-3">
+      <aside data-tour="composer-list" className="w-60 shrink-0 h-full overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-bg-card)] p-3 flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">Çizimler</span>
           <Button size="sm" variant="ghost" onClick={() => addComposition()} aria-label="Yeni çizim" title="Bu işe yeni çizim ekle"><Plus size={14} /></Button>
@@ -279,7 +279,7 @@ export default function ComposerPage() {
           }}><Trash2 size={13} /> Çizimi sil</Button>
         </div>
 
-        <div className="border-t border-[var(--color-border)] pt-3 flex flex-col gap-2">
+        <div data-tour="composer-newbox" className="border-t border-[var(--color-border)] pt-3 flex flex-col gap-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">Yeni kutu</span>
           <ContentPicker value={newContent} onChange={setNewContent} />
           <NumInput label="Derinlik" value={newDepth} onChange={setNewDepth} min={100} max={1200} />
@@ -297,7 +297,7 @@ export default function ComposerPage() {
             <Button size="sm" variant="ghost" onClick={() => setActivePage('3d-preview')}><BoxIcon size={13} /> 3D'de gör</Button>
           </div>
         </div>
-        <div className="flex-1 p-3 overflow-hidden">
+        <div data-tour="composer-canvas" className="flex-1 p-3 overflow-hidden">
           <ComposerCanvas
             wall={wall}
             boxes={group}
@@ -329,7 +329,7 @@ export default function ComposerPage() {
         </div>
       </div>
 
-      <aside className="w-80 shrink-0 h-full overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-bg-card)] p-4">
+      <aside data-tour="composer-panel" className="w-80 shrink-0 h-full overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-bg-card)] p-4">
         {selected ? <BoxPanel box={selected} group={group} selectedCell={selectedCell} onSelectCell={(ref) => setCellSel(ref ? { boxId: selected.id, ref } : null)} /> : (
           <Card className="border-0">
             <GroupPanel groupId={composition.id} group={group} newContent={newContent} newDepth={newDepth} />

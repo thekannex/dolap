@@ -57,7 +57,7 @@ export default function WallLayoutView({ wall }: { wall: Wall }) {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-[var(--color-bg)]">
+    <div data-tour="wall-view" className="flex-1 flex flex-col overflow-hidden bg-[var(--color-bg)]">
       <div className="flex items-center gap-4 px-4 py-2 border-b border-[var(--color-border)] bg-[var(--color-bg-card)] text-xs text-[var(--color-text-muted)]">
         <span className="font-semibold text-[var(--color-text)]">{wall.name}</span>
         <span>Kullanılabilir: <b className="font-mono">{wall.effectiveWidth}</b> mm</span>

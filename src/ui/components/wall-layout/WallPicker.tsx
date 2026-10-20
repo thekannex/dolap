@@ -17,7 +17,7 @@ export default function WallPicker({ activeId }: { activeId: string | undefined 
   })));
 
   return (
-    <div className="flex gap-2 items-end">
+    <div data-tour="wall-picker" className="flex gap-2 items-end">
       <label className="flex flex-col gap-1 flex-1 min-w-0">
         <span className="text-xs text-[var(--color-text-muted)]">Duvar</span>
         <select value={activeId ?? ''} onChange={(e) => {

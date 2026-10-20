@@ -20,7 +20,7 @@ export default function ObstacleEditor({ wall }: { wall: Wall }) {
   };
 
   return (
-    <details open={wall.obstacles.length > 0} className="border border-[var(--color-border)] rounded-lg">
+    <details data-tour="wall-obstacles" open={wall.obstacles.length > 0} className="border border-[var(--color-border)] rounded-lg">
       <summary className="px-3 py-2.5 cursor-pointer text-xs font-bold uppercase tracking-wider text-[var(--color-accent)]">
         Duvar şekli, engeller ve cihazlar ({wall.obstacles.length})
       </summary>

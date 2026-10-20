@@ -149,8 +149,8 @@ export default function ProjectList() {
             <p className="text-sm text-[var(--color-text-muted)]">Projeler bu bilgisayarda otomatik kaydedilir.</p>
           </div>
           <div className="flex gap-2">
-            <Button onClick={handleImport}><Upload size={15} /> Yedekten aç</Button>
-            {!empty && <Button variant="primary" onClick={() => setShowNew(true)}><Plus size={15} /> Yeni proje</Button>}
+            <Button data-tour="projects-import" onClick={handleImport}><Upload size={15} /> Yedekten aç</Button>
+            {!empty && <Button data-tour="projects-new" variant="primary" onClick={() => setShowNew(true)}><Plus size={15} /> Yeni proje</Button>}
           </div>
         </div>
 
@@ -175,7 +175,7 @@ export default function ProjectList() {
         {(showNew || empty) && <NewProjectForm onCancel={empty ? undefined : () => setShowNew(false)} />}
 
         {projects && projects.length > 0 && (
-          <Card>
+          <Card tour="projects-table">
             <table className="w-full text-sm">
               <thead className="text-xs uppercase text-[var(--color-text-dim)] bg-[var(--color-bg)]">
                 <tr>

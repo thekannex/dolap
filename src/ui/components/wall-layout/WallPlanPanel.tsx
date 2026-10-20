@@ -52,7 +52,7 @@ export default function WallPlanPanel({ wall }: { wall: Wall }) {
   };
 
   return (
-    <div className="border border-[var(--color-border)] rounded-lg p-3 flex flex-col gap-3">
+    <div data-tour="wall-plan" className="border border-[var(--color-border)] rounded-lg p-3 flex flex-col gap-3">
       <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-accent)]">Otomatik yerleşim</h3>
       <div>
         <p className="text-[11px] text-[var(--color-text-dim)] mb-1.5">Kullanılacak dolap genişlikleri (mm)</p>
