@@ -24,6 +24,8 @@ export interface ProjectStore {
   activeCompositionId: string | null;
   /** Açık iş; sayfalar bu işin duvar, çizim ve dolaplarıyla çalışır. */
   activeJobId: string | null;
+  /** Proje açılınca/kapanınca artar; geri al geçmişi bununla sıfırlanır. */
+  session: number;
 
   newProject: (name: string, customerName: string, kind?: ProjectKind) => void;
   openProject: (project: Project) => void;
@@ -125,18 +127,19 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
     activeCabinetId: null,
     activeCompositionId: null,
     activeJobId: null,
+    session: 0,
 
     newProject: (name, customerName, kind = 'kitchen') => {
       const project = createProject({ id: uid(), spaceId: uid(), wallId: uid(), jobId: uid(), compositionId: uid(), name, customerName, now: new Date().toISOString(), kind });
-      set({ project, ...selectionFor(project, project.jobs[0].id) });
+      set({ project, ...selectionFor(project, project.jobs[0].id), session: get().session + 1 });
     },
 
     openProject: (raw) => {
       const project = normalizeProject(raw);
-      set({ project, ...selectionFor(project, project.jobs[0]?.id ?? null) });
+      set({ project, ...selectionFor(project, project.jobs[0]?.id ?? null), session: get().session + 1 });
     },
 
-    closeProject: () => set({ project: null, activeSpaceId: null, activeWallId: null, activeCabinetId: null, activeCompositionId: null, activeJobId: null }),
+    closeProject: () => set({ project: null, activeSpaceId: null, activeWallId: null, activeCabinetId: null, activeCompositionId: null, activeJobId: null, session: get().session + 1 }),
 
     updateProjectInfo: (updates) => mutate((p) => ({ ...p, ...updates })),
 

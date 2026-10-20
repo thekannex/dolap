@@ -1,7 +1,6 @@
 import { ArrowLeft, Download, Plus, Trash2, ChevronRight, AlertTriangle } from 'lucide-react';
 import { useProjectStore } from '../../../stores/project-store';
 import { useUIStore } from '../../../stores/ui-store';
-import { saveNow } from '../../../stores/autosave';
 import { exportProjectJSON } from '../../../core/persistence/json-io';
 import { JOB_KINDS, jobContent, jobKindInfo } from '../../../core/project/jobs';
 import type { JobKind } from '../../../core/models/project';
@@ -14,7 +13,6 @@ import { Button, Card, Stat, TextInput } from '../shared/ui';
 export default function ProjectOverview() {
   const project = useProjectStore((s) => s.project)!;
   const updateProjectInfo = useProjectStore((s) => s.updateProjectInfo);
-  const closeProject = useProjectStore((s) => s.closeProject);
   const activeJobId = useProjectStore((s) => s.activeJobId);
   const addJob = useProjectStore((s) => s.addJob);
   const renameJob = useProjectStore((s) => s.renameJob);
@@ -32,21 +30,16 @@ export default function ProjectOverview() {
     setActivePage(firstStep(kind));
   };
 
-  const handleClose = async () => {
-    await saveNow();
-    closeProject();
-  };
-
-  const handleNewProject = async () => {
+  const handleNewProject = () => {
     setNewProjectRequested(true);
-    await handleClose();
+    setActivePage('projects');
   };
 
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-6xl mx-auto p-6 flex flex-col gap-5">
         <div className="flex items-center justify-between gap-3">
-          <Button variant="ghost" size="sm" onClick={handleClose}><ArrowLeft size={14} /> Tüm projeler</Button>
+          <Button variant="ghost" size="sm" onClick={() => setActivePage('projects')}><ArrowLeft size={14} /> Tüm projeler</Button>
           <div className="flex gap-2">
             <Button size="sm" onClick={() => saveText(exportProjectJSON(project), `${safeFileName(project.name)}.dolap.json`, 'application/json')}>
               <Download size={14} /> Yedek al

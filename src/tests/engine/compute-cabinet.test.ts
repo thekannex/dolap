@@ -393,3 +393,20 @@ describe('computeCabinet — kapak arkasındaki yan dikme', () => {
     expect(warn(box({ leftSideBehind: true, topJoint: 'over', bottomJoint: 'over' }))).toBe(false);
   });
 });
+
+describe('computeCabinet — çakma arkalık', () => {
+  it('bazalı 1600×2200 dolapta arkalık dış ölçüden 2şer mm eksik ve bazayı da örter', () => {
+    const cab = base({ type: 'custom', width: 1600, height: 2200, depth: 400, railWidth: 0, plinthHeight: 100, backType: 'nailed', backThickness: 3 });
+    expect(computeCabinet(cab).parts.find((p) => p.id === 'back')).toMatchObject({ length: 1596, width: 2196, thickness: 3 });
+  });
+
+  it('ayaklı dolapta ayak yüksekliği düşülür', () => {
+    const cab = base({ type: 'custom', width: 800, height: 900, depth: 400, railWidth: 0, legHeight: 100, backType: 'nailed', backThickness: 3 });
+    expect(computeCabinet(cab).parts.find((p) => p.id === 'back')).toMatchObject({ length: 796, width: 796 });
+  });
+
+  it('kanallı arkalık değişmez', () => {
+    const cab = base({ type: 'custom', width: 800, height: 900, depth: 400, railWidth: 0, backType: 'routed' });
+    expect(computeCabinet(cab).parts.find((p) => p.id === 'back')!.length).toBeLessThan(800 - 18);
+  });
+});

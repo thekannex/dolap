@@ -10,7 +10,7 @@ import { JOB_ICONS, firstStep } from '../../navigation';
 import { formatDateTime, safeFileName } from '../../../core/utils/format';
 import { useProjectStore } from '../../../stores/project-store';
 import { useUIStore } from '../../../stores/ui-store';
-import { openWithoutSaving } from '../../../stores/autosave';
+import { openWithoutSaving, saveNow } from '../../../stores/autosave';
 import { pickTextFile, saveText } from '../../lib/files';
 import { Button, Card, TextInput } from '../shared/ui';
 
@@ -23,9 +23,10 @@ function NewProjectForm({ onCancel }: { onCancel?: () => void }) {
   const [customer, setCustomer] = useState('');
   const [kind, setKind] = useState<ProjectKind>('kitchen');
 
-  const submit = () => {
+  const submit = async () => {
     if (!name.trim()) return;
     setNewProjectRequested(false);
+    await saveNow();
     newProject(name.trim(), customer.trim(), kind);
     setActivePage(firstStep(kind));
   };
@@ -33,7 +34,7 @@ function NewProjectForm({ onCancel }: { onCancel?: () => void }) {
   return (
     <Card title="Yeni proje">
       <form className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3"
-        onSubmit={(e) => { e.preventDefault(); submit(); }}>
+        onSubmit={(e) => { e.preventDefault(); void submit(); }}>
         <p className="sm:col-span-2 text-xs text-[var(--color-text-muted)]">İlk işi seçin; aynı projeye sonradan başka işler (kiler, TV ünitesi…) de eklenir.</p>
         <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-2" role="radiogroup" aria-label="İlk iş">
           {JOB_KINDS.map(({ value, label: title, text }) => { const Icon = JOB_ICONS[value]; return (
@@ -70,8 +71,13 @@ export default function ProjectList() {
   const [showNew, setShowNewState] = useState(newProjectRequested);
   const setShowNew = (v: boolean) => { setShowNewState(v); if (!v) setNewProjectRequested(false); };
 
+  const openId = useProjectStore((s) => s.project?.id ?? null);
+  const setActivePage = useUIStore((s) => s.setActivePage);
+
   const refresh = useCallback(async () => {
     try {
+      // Açık projenin son hali listede görünsün
+      await saveNow();
       setProjects(await listProjects());
     } catch (err) {
       console.error(err);
@@ -93,7 +99,9 @@ export default function ProjectList() {
         project = { ...project, id: crypto.randomUUID(), name: `${project.name} (içe aktarılan)` };
       }
       await saveProject(project);
+      await saveNow();
       openWithoutSaving(project);
+      setActivePage('project');
       notify('success', `"${project.name}" içe aktarıldı.`);
     } catch (err) {
       notify('error', err instanceof Error ? err.message : 'Dosya içe aktarılamadı.');
@@ -122,6 +130,15 @@ export default function ProjectList() {
   };
 
   const empty = projects !== null && projects.length === 0;
+
+  /** Açık projeyi kaydedip seçileni açar; açık olana tıklanırsa yalnızca özetine gider. */
+  const open = async (sp: SavedProject) => {
+    if (sp.id !== openId) {
+      await saveNow();
+      openWithoutSaving(sp.data);
+    }
+    setActivePage('project');
+  };
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -173,22 +190,23 @@ export default function ProjectList() {
                 {projects.map((sp) => (
                   <tr key={sp.id} className="hover:bg-[var(--color-bg-hover)]/40 group">
                     <td className="px-4 py-2.5">
-                      <button className="font-medium text-[var(--color-text)] hover:text-[var(--color-accent)] text-left" onClick={() => openWithoutSaving(sp.data)}>
+                      <button className="font-medium text-[var(--color-text)] hover:text-[var(--color-accent)] text-left" onClick={() => open(sp)}>
                         {sp.data.name}
                       </button>
+                      {sp.id === openId && <span className="ml-2 text-[10px] font-semibold uppercase rounded px-1.5 py-0.5 bg-[var(--color-accent)]/10 text-[var(--color-accent)]">Açık</span>}
                     </td>
                     <td className="px-4 py-2.5 text-[var(--color-text-muted)]">{sp.data.customerName || '—'}</td>
                     <td className="px-4 py-2.5 text-center font-mono">{sp.data.cabinets?.length ?? 0}</td>
                     <td className="px-4 py-2.5 text-[var(--color-text-muted)] text-xs">{formatDateTime(sp.savedAt)}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex justify-end gap-1">
-                        <Button size="sm" variant="primary" onClick={() => openWithoutSaving(sp.data)}><FolderOpen size={13} /> Aç</Button>
+                        <Button size="sm" variant={sp.id === openId ? 'secondary' : 'primary'} onClick={() => open(sp)}><FolderOpen size={13} /> {sp.id === openId ? 'Devam et' : 'Aç'}</Button>
                         <Button size="sm" variant="ghost" title="Çoğalt" aria-label="Çoğalt" onClick={() => handleDuplicate(sp)}><Copy size={13} /></Button>
                         <Button size="sm" variant="ghost" title="Yedek al (.dolap.json)" aria-label="Yedek al"
                           onClick={() => saveText(exportProjectJSON(sp.data), `${safeFileName(sp.data.name)}.dolap.json`, 'application/json')}>
                           <Download size={13} />
                         </Button>
-                        <Button size="sm" variant="danger" title="Sil" aria-label="Sil" onClick={() => handleDelete(sp)}><Trash2 size={13} /></Button>
+                        <Button size="sm" variant="danger" title={sp.id === openId ? 'Açık proje silinemez; önce başka proje açın' : 'Sil'} aria-label="Sil" disabled={sp.id === openId} onClick={() => handleDelete(sp)}><Trash2 size={13} /></Button>
                       </div>
                     </td>
                   </tr>

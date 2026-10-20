@@ -82,7 +82,10 @@ export function CabinetModel({ cabinet, showFronts, highlight = false }: { cabin
       ) : (
         <Board pos={[0, H - t / 2, 0]} size={[topOver ? W : innerW, t, D]} color={wood} />
       )}
-      {cabinet.hasBackPanel && <Board pos={[0, H / 2, -D / 2 + bt / 2]} size={[innerW, H - 2 * t, bt]} color="#b5b5b5" />}
+      {cabinet.hasBackPanel && (cabinet.backType === 'nailed'
+        // Çakma arkalık dikmelerin arkasında, dış ölçüden 2'şer mm eksik
+        ? <Board pos={[0, H / 2, -D / 2 - bt / 2]} size={[W - 0.04, H - 0.04, bt]} color="#b5b5b5" />
+        : <Board pos={[0, H / 2, -D / 2 + bt / 2]} size={[innerW, H - 2 * t, bt]} color="#b5b5b5" />)}
 
       {geo && (
         <>

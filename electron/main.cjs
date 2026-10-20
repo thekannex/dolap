@@ -90,8 +90,9 @@ function buildMenu() {
     {
       label: 'Düzen',
       submenu: [
-        { label: 'Geri al', role: 'undo' },
-        { label: 'Yinele', role: 'redo' },
+        // Uygulamanın kendi geri al/yinele'si; yazı alanındayken metnin geri alması çalışır
+        { label: 'Geri al', accelerator: 'CmdOrCtrl+Z', click: (_item, win) => win?.webContents.executeJavaScript("window.dispatchEvent(new Event('dolap:undo'))") },
+        { label: 'Yinele', accelerator: 'CmdOrCtrl+Y', click: (_item, win) => win?.webContents.executeJavaScript("window.dispatchEvent(new Event('dolap:redo'))") },
         { type: 'separator' },
         { label: 'Kes', role: 'cut' },
         { label: 'Kopyala', role: 'copy' },

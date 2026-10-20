@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
-import { FolderOpen, Table2, Box, Settings, Check, Loader2, AlertCircle, ChevronRight } from 'lucide-react';
+import { FolderOpen, FolderKanban, Table2, Box, Settings, Check, Loader2, AlertCircle, ChevronRight, Undo2, Redo2 } from 'lucide-react';
 import { useUIStore } from './stores/ui-store';
 import type { PageId } from './stores/ui-store';
 import { useProjectStore, useActiveJob } from './stores/project-store';
 import { JOB_ICONS, JOB_PAGES, JOB_STEPS, firstStep } from './ui/navigation';
 import { jobKindInfo } from './core/project/jobs';
 import { useSaveStatus, startAutosave, restoreLastProject } from './stores/autosave';
+import { undo, redo, useHistoryState } from './stores/history';
 import { formatDateTime } from './core/utils/format';
 import ProjectPage from './ui/components/project/ProjectPage';
+import ProjectList from './ui/components/project/ProjectList';
 import WallLayoutPage from './ui/components/wall-layout/WallLayoutPage';
 import EditorPage from './ui/components/cabinet-editor/EditorPage';
 import CutListPage from './ui/components/cut-list/CutListPage';
@@ -53,6 +55,52 @@ function JobSwitcher({ page }: { page: PageId }) {
   );
 }
 
+const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+// Masaüstü sürümde Ctrl+Z ve Ctrl+Y menüden gelir (çift çalışmasın diye klavyeden dinlenmez)
+const inElectron = typeof navigator !== 'undefined' && navigator.userAgent.includes('Electron');
+
+/** Geri al / yinele: Ctrl+Z, Ctrl+Y ya da Ctrl+Shift+Z ve masaüstü menüsü. Yazı alanında metnin kendi geri alması çalışır. */
+function useUndoShortcuts() {
+  useEffect(() => {
+    const run = (kind: 'undo' | 'redo', fromMenu: boolean) => {
+      if (isTyping(document.activeElement)) {
+        if (fromMenu) document.execCommand(kind);
+        return;
+      }
+      if (kind === 'undo') undo(); else redo();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || isTyping(e.target)) return;
+      const k = e.key.toLowerCase();
+      const kind = k === 'z' ? (e.shiftKey ? 'redo' : 'undo') : k === 'y' ? 'redo' : null;
+      if (!kind || (inElectron && !(k === 'z' && e.shiftKey))) return;
+      e.preventDefault();
+      run(kind, false);
+    };
+    const onUndo = () => run('undo', true);
+    const onRedo = () => run('redo', true);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('dolap:undo', onUndo);
+    window.addEventListener('dolap:redo', onRedo);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('dolap:undo', onUndo);
+      window.removeEventListener('dolap:redo', onRedo);
+    };
+  }, []);
+}
+
+function UndoButtons() {
+  const { canUndo, canRedo } = useHistoryState();
+  const cls = 'p-1.5 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-bg-hover)]/60 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed';
+  return (
+    <div className="flex items-center">
+      <button className={cls} disabled={!canUndo} onClick={() => undo()} title="Geri al (Ctrl+Z)" aria-label="Geri al"><Undo2 size={15} /></button>
+      <button className={cls} disabled={!canRedo} onClick={() => redo()} title="Yinele (Ctrl+Y)" aria-label="Yinele"><Redo2 size={15} /></button>
+    </div>
+  );
+}
+
 function SaveIndicator() {
   const { status, lastSavedAt } = useSaveStatus();
   if (status === 'idle') return null;
@@ -77,6 +125,7 @@ export default function App() {
   const job = useActiveJob();
   const steps = job ? JOB_STEPS[job.kind] : [];
   const [ready, setReady] = useState(false);
+  useUndoShortcuts();
 
   useEffect(() => {
     const stop = startAutosave();
@@ -86,7 +135,7 @@ export default function App() {
 
   // Proje kapanınca proje sayfasına; açık işin adımı olmayan sayfadan işin ilk adımına
   let page: PageId = activePage;
-  if (!hasProject && page !== 'settings') page = 'project';
+  if (!hasProject && page !== 'settings') page = 'projects';
   else if (JOB_PAGES.has(page) && !steps.some((s) => s.id === page)) page = job ? firstStep(job.kind) : 'project';
 
   return (
@@ -101,9 +150,14 @@ export default function App() {
         </div>
 
         <nav className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto">
-          <button onClick={() => setActivePage('project')} className={navCls(page === 'project')}>
-            <FolderOpen size={14} /> Proje
+          <button onClick={() => setActivePage('projects')} className={navCls(page === 'projects')} title="Kayıtlı tüm projeler">
+            <FolderKanban size={14} /> Projeler
           </button>
+          {hasProject && (
+            <button onClick={() => setActivePage('project')} className={navCls(page === 'project')} title="Açık projenin bilgileri ve işleri">
+              <FolderOpen size={14} /> Proje
+            </button>
+          )}
           {hasProject && job && (
             <>
               <ChevronRight size={14} className="text-[var(--color-text-dim)] shrink-0" />
@@ -128,6 +182,7 @@ export default function App() {
           )}
         </nav>
 
+        {hasProject && <UndoButtons />}
         <SaveIndicator />
         <button onClick={() => setActivePage('settings')} title="Ayarlar ve fiyatlar"
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-colors ${
@@ -144,6 +199,7 @@ export default function App() {
           </div>
         ) : (
           <ErrorBoundary key={`${page}-${job?.id ?? ""}`}>
+            {page === 'projects' && <ProjectList />}
             {page === 'project' && <ProjectPage />}
             {page === 'wall-layout' && <WallLayoutPage />}
             {page === 'wall-shape' && <WallShapePage />}

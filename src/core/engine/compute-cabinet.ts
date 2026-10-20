@@ -3,7 +3,7 @@ import type { CalculationTrace, ValidationWarning } from '../models/common';
 import { roundDown05 } from '../utils/rounding';
 import {
   calcSideDepth, calcBottomDepth,
-  calcRailWidth, calcRailDepth, calcBackWidth, calcBackHeight,
+  calcRailWidth, calcRailDepth, calcBackWidth, calcBackHeight, NAILED_BACK_EDGE,
   calcInnerDepth, calcInnerWidth,
 } from './cabinet-calc';
 import {
@@ -306,8 +306,10 @@ export function computeCabinet(cab: CabinetState, opts: ComputeOptions = {}): Co
   }
 
   if (cab.hasBackPanel) {
-    const backW = calcBackWidth(Wi, t, cab.backType, cab.backChannelDepth);
-    const backH = calcBackHeight(Hfi, t, cab.assemblyType, cab.backType, cab.backChannelDepth, withRails);
+    // Kanallı arkalık iç ölçüye (kanallara), çakma arkalık dolabın dış ölçüsüne göre kesilir
+    const nailed = cab.backType === 'nailed';
+    const backW = calcBackWidth(nailed ? W : Wi, t, cab.backType, cab.backChannelDepth);
+    const backH = calcBackHeight(nailed ? H : Hfi, t, cab.assemblyType, cab.backType, cab.backChannelDepth, withRails);
     parts.push({
       id: 'back', code: `${cab.code}-ARKALIK`, name: cab.backPanelCutout ? 'Arkalık (tesisat kesikli)' : 'Arkalık',
       group: 'body', material: 'back',
@@ -316,7 +318,7 @@ export function computeCabinet(cab: CabinetState, opts: ComputeOptions = {}): Co
     if (cab.backPanelCutout || result.sink) {
       // Kesik, çanak ekseninde; arkalığın sol kenarına göre verilir (arkalık yan dikmelerin arasında başlar)
       const bowl = result.sink?.bowls[0];
-      const center = bowl ? roundDown05(bowl.x + bowl.w / 2 - t) : null;
+      const center = bowl ? roundDown05(bowl.x + bowl.w / 2 - (nailed ? NAILED_BACK_EDGE : t)) : null;
       warnings.push({
         id: `${cab.code}-sink-cutout`, severity: 'info', ruleId: 'INFO_SINK_CUTOUT',
         message: center !== null

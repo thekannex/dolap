@@ -249,16 +249,16 @@ describe('cabinet-calc', () => {
       expect(r.trace.ruleId).toBe('RULE_BACK_WIDTH_ROUTED');
     });
 
-    it('nailed: W - 2t', () => {
+    it('nailed: dış genişlikten 2şer mm eksik', () => {
       const r = calcBackWidth(800, 18, 'nailed', 0);
-      expect(r.value).toBe(764);
+      expect(r.value).toBe(796);
       expect(r.trace.ruleId).toBe('RULE_BACK_WIDTH_NAILED');
-      expect(r.trace.formula).toBe('W - 2t');
+      expect(r.trace.formula).toBe('W - 2×2');
     });
 
     it('nailed 600mm dolap', () => {
       const r = calcBackWidth(600, 18, 'nailed', 0);
-      expect(r.value).toBe(564);
+      expect(r.value).toBe(596);
       expect(r.trace.ruleId).toBe('RULE_BACK_WIDTH_NAILED');
     });
   });
@@ -281,18 +281,18 @@ describe('cabinet-calc', () => {
       expect(r.trace.formula).toBe('H - 2t + 2*(k-1)');
     });
 
-    it('nailed, sides_out: H - 2t', () => {
+    it('nailed: dış yükseklikten 2şer mm eksik', () => {
       const r = calcBackHeight(720, 18, 'sides_out', 'nailed', 0, false);
-      expect(r.value).toBe(684);
+      expect(r.value).toBe(716);
       expect(r.trace.ruleId).toBe('RULE_BACK_HEIGHT');
-      expect(r.trace.formula).toBe('H - 2t');
+      expect(r.trace.formula).toBe('H - 2×2');
     });
 
-    it('nailed, sides_in: H', () => {
+    it('nailed, sides_in: montaj tipi fark etmez, H - 2×2', () => {
       const r = calcBackHeight(720, 18, 'sides_in', 'nailed', 0, false);
-      expect(r.value).toBe(720);
+      expect(r.value).toBe(716);
       expect(r.trace.ruleId).toBe('RULE_BACK_HEIGHT');
-      expect(r.trace.formula).toBe('H');
+      expect(r.trace.formula).toBe('H - 2×2');
     });
 
     it('isBaseWithRails parametresi trace içine doğru aktarılır', () => {

@@ -80,16 +80,19 @@ export function calcRailDepth(railWidth: number): CalcResult {
   };
 }
 
+/** Çakma arkalık dolabın arkasını tam örter; kenarlardan görünmesin diye her yandan bu kadar içeride kesilir (mm). */
+export const NAILED_BACK_EDGE = 2;
+
 export function calcBackWidth(W: number, t: number, backType: BackType, backChannelDepth: number): CalcResult {
   const isRouted = backType === 'routed';
-  const val = isRouted ? W - 2 * t + 2 * (backChannelDepth - 1) : W - 2 * t;
+  const val = isRouted ? W - 2 * t + 2 * (backChannelDepth - 1) : W - 2 * NAILED_BACK_EDGE;
   return {
     value: roundDown05(val),
     trace: {
-      formula: isRouted ? 'W - 2t + 2*(k-1)' : 'W - 2t',
+      formula: isRouted ? 'W - 2t + 2*(k-1)' : `W - 2×${NAILED_BACK_EDGE}`,
       inputs: { W, t, backType, backChannelDepth },
       ruleId: isRouted ? 'RULE_BACK_WIDTH_ROUTED' : 'RULE_BACK_WIDTH_NAILED',
-      description: isRouted ? 'Arkalık iç ölçü + 2×(kanal derinliği − 1) mm.' : 'Çakma arkalık genişliği = W - 2t.'
+      description: isRouted ? 'Arkalık iç ölçü + 2×(kanal derinliği − 1) mm.' : `Çakma arkalık dikmelerin arka kenarına çakılır; dolabın dış genişliğinden her yandan ${NAILED_BACK_EDGE} mm eksik, kenardan görünmez.`
     }
   };
 }
@@ -109,8 +112,9 @@ export function calcBackHeight(H: number, t: number, assemblyType: AssemblyType,
       formula = 'H - 2t + 2*(k-1)';
     }
   } else {
-    val = isSidesOut ? H - 2 * t : H;
-    formula = isSidesOut ? 'H - 2t' : 'H';
+    // Çakma arkalık dolabın tüm arka yüzünü örter (baza bölgesi dahil); üstten ve alttan 2'şer mm eksik
+    val = H - 2 * NAILED_BACK_EDGE;
+    formula = `H - 2×${NAILED_BACK_EDGE}`;
   }
 
   return {
@@ -119,7 +123,7 @@ export function calcBackHeight(H: number, t: number, assemblyType: AssemblyType,
       formula,
       inputs: { H, t, assemblyType, backType, backChannelDepth, isBaseWithRails },
       ruleId: 'RULE_BACK_HEIGHT',
-      description: 'Arkalık yüksekliği hesaplaması.'
+      description: isRouted ? 'Kanallı arkalık üst ve alt tablanın kanallarına girer.' : `Çakma arkalık dolabın dış yüksekliğinden üstten ve alttan ${NAILED_BACK_EDGE} mm eksik.`
     }
   };
 }
