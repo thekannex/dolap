@@ -5,6 +5,7 @@ import type { AppSettings } from '../../../core/models/settings';
 import type { HardwareKey, PartMaterial } from '../../../core/engine/compute-cabinet';
 import { formatNumber } from '../../../core/utils/format';
 import { Button, Card, NumInput, TextInput } from '../shared/ui';
+import UpdateCard from './UpdateCard';
 
 const MATERIAL_LABELS: Record<PartMaterial, string> = {
   body: 'Gövde levhası',
@@ -56,6 +57,8 @@ export default function SettingsPage() {
               <TextInput label="Adres" value={settings.workshopAddress} onChange={(v) => set('workshopAddress', v)} />
             </div>
           </Card>
+
+          <UpdateCard />
 
           <Card title="Plaka ve kesim" tour="settings-sheet">
             <div className="p-4 grid grid-cols-2 gap-3">

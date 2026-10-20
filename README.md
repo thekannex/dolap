@@ -8,12 +8,13 @@ Mutfak dolaplarının (alt, üst, boy, çekmeceli, evye) yanında gardırop, kit
 
 ### Çalıştırma (kurulum gerekmez)
 
-Program tek bir dosyadır: `Dolap-Tasinabilir-<sürüm>.exe`. Kurulum yapılmaz; dosyayı istediğiniz bir klasöre (ya da USB belleğe) koyup çift tıklayın.
+Program tek bir dosyadır: `Dolap.exe` ([GitHub sürümler sayfasından](https://github.com/thekannex/dolap/releases/latest) indirilir). Kurulum yapılmaz; dosyayı istediğiniz bir klasöre (ya da USB belleğe) koyup çift tıklayın.
 
 - **İlk açılışta** dosyanın yanında `Dolap-Dosyalari` klasörü oluşur ve program bir kez buraya hazırlanır (birkaç saniye, ilerleme çubuğuyla). **Sonraki açılışlar** hazırlık yapmadan doğrudan başlar.
 - **Projeler de bu klasörde** (`Dolap-Dosyalari\veriler`) saklanır. Programı başka bir bilgisayara ya da USB belleğe taşırken `.exe` dosyasını ve `Dolap-Dosyalari` klasörünü **birlikte** taşıyın; projeleriniz de gelir.
 - Daha önceki sürümlerde bu bilgisayarda kaydedilmiş projeler ilk açılışta yeni klasöre kopyalanır.
-- Yeni sürümü eskisinin yanına koyup açtığınızda program yeniden hazırlanır, eski sürümün program klasörü silinir; projeler kalır.
+- **Güncelleme:** program her açılışta GitHub'da yeni sürüm olup olmadığına bakar. Varsa üstte şerit çıkar: **İndir ve güncelle** yeni dosyayı indirip doğrular, **Şimdi yeniden başlat** `Dolap.exe`'yi yerinde değiştirip yeni sürümü açar; projeler korunur. Hiçbir şey sorulmadan indirilmez. Elle denetlemek için **Yardım → Güncellemeleri denetle** ya da Ayarlar'daki **Güncellemeler** kartı. (1.17.0 ve öncesinde güncelleyici yoktu; o sürümlerden bir kez elle 1.18.0'a geçin: yeni `Dolap.exe`'yi eskisinin yanına koyup açın, eski .exe'yi silebilirsiniz.)
+- Yeni sürüm ilk açılışta yeniden hazırlanır, eski sürümün program klasörü silinir; projeler kalır.
 - Dosya yazılamayan bir yerdeyse (CD, salt okunur klasör) program geçici klasörde çalışır ve projeler kullanıcı klasörüne kaydedilir.
 - Açılırken "Dolap açılıyor…" ekranı görünür.
 

@@ -8,7 +8,8 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const { version } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const appDir = path.join(root, 'release', 'win-unpacked');
-const outFile = path.join(root, 'release', `Dolap-Tasinabilir-${version}.exe`);
+// Sabit ad: güncelleyici her sürümde bu dosyayı yerinde değiştirir; kısayollar bozulmaz
+const outFile = path.join(root, 'release', 'Dolap.exe');
 const icon = [path.join(root, 'release', '.icon-ico', 'icon.ico'), path.join(root, 'build', 'icon.ico')].find((p) => fs.existsSync(p));
 
 /** electron-builder'ın indirdiği NSIS derleyicisi. */

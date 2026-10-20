@@ -19,6 +19,7 @@ import ComposerPage from './ui/components/composer/ComposerPage';
 import WallShapePage from './ui/components/wall-layout/WallShapePage';
 import { Toasts, ConfirmDialog, ErrorBoundary } from './ui/components/shared/Overlays';
 import PageTour from './ui/components/tour/PageTour';
+import UpdateBanner from './ui/components/shared/UpdateBanner';
 
 /** Tüm projeye ait sayfalar (işten bağımsız). */
 const PROJECT_PAGES: Array<{ id: PageId; label: string; icon: typeof FolderOpen }> = [
@@ -197,6 +198,7 @@ export default function App() {
         </button>
       </header>
 
+      <UpdateBanner />
       <main className="flex-1 flex overflow-hidden">
         {!ready ? (
           <div className="flex-1 flex items-center justify-center text-sm text-[var(--color-text-dim)]">

@@ -41,6 +41,8 @@ Function Launch
   ; Uygulama verileri nereye yazacağını bu değişkenden öğrenir (boşsa varsayılan kullanıcı klasörü)
   System::Call 'Kernel32::SetEnvironmentVariable(t, t)i ("DOLAP_PORTABLE_DATA", "$DATADIR").r0'
   System::Call 'Kernel32::SetEnvironmentVariable(t, t)i ("PORTABLE_EXECUTABLE_DIR", "$EXEDIR").r0'
+  ; Güncelleyici bu .exe'yi yeni sürümle değiştirir
+  System::Call 'Kernel32::SetEnvironmentVariable(t, t)i ("DOLAP_LAUNCHER", "$EXEPATH").r0'
   ${GetParameters} $R0
   Exec '"$APPDIR\Dolap.exe" $R0'
 FunctionEnd

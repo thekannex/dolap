@@ -1,8 +1,10 @@
 // Dolap masaüstü uygulaması — Electron ana süreci.
 // Arayüz, Vite ile derlenen dist/ klasöründen yüklenir; Node.js erişimi arayüze açılmaz.
-const { app, BrowserWindow, Menu, shell, dialog } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, ipcMain } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
+const { spawn } = require('node:child_process');
+const update = require('./update-core.cjs');
 
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
 const ICON = path.join(__dirname, '..', 'build', 'icon.png');
@@ -34,9 +36,11 @@ if (PORTABLE_DATA) {
   }
 }
 
-if (!app.requestSingleInstanceLock()) {
-  app.quit();
-}
+// Tek pencere: ikinci açılış mevcut pencereyi öne getirir. Güncellemeden hemen sonra açılan yeni sürüm,
+// eski sürüm kapanana kadar birkaç saniye bekler.
+const AFTER_UPDATE = process.argv.includes('--guncellendi');
+let gotLock = app.requestSingleInstanceLock();
+if (!gotLock && !AFTER_UPDATE) app.quit();
 
 let mainWindow = null;
 let splash = null;
@@ -86,6 +90,7 @@ function createWindow() {
     backgroundColor: '#f8f8fa',
     autoHideMenuBar: true,
     webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -134,6 +139,75 @@ function createWindow() {
   });
 }
 
+// --- Güncelleme: GitHub'daki en güncel sürüm ---
+// Yalnızca taşınabilir başlatıcıyla açıldığında çalışır (başlatıcı .exe yolunu DOLAP_LAUNCHER ile bildirir).
+const LAUNCHER = process.env.DOLAP_LAUNCHER || '';
+const UPDATE_FEED = process.env.DOLAP_UPDATE_URL || update.RELEASES_API;
+let updateState = { state: LAUNCHER ? 'idle' : 'unsupported', current: app.getVersion() };
+let latest = null;
+let downloaded = null;
+
+function setUpdateState(patch) {
+  updateState = { ...updateState, ...patch, current: app.getVersion() };
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update:state', updateState);
+}
+
+async function checkForUpdate() {
+  if (!LAUNCHER) return updateState;
+  if (['checking', 'downloading'].includes(updateState.state)) return updateState;
+  setUpdateState({ state: 'checking', error: undefined });
+  try {
+    latest = await update.fetchLatest(fetch, UPDATE_FEED);
+    if (!update.isNewer(latest.version, app.getVersion()) || !latest.asset) {
+      setUpdateState({ state: 'none', latest: { version: latest.version, title: latest.title, notes: latest.notes, page: latest.page } });
+    } else {
+      setUpdateState({
+        state: 'available', progress: 0,
+        writable: update.canWrite(path.dirname(LAUNCHER)),
+        latest: { version: latest.version, title: latest.title, notes: latest.notes, page: latest.page, size: latest.asset.size },
+      });
+    }
+  } catch (err) {
+    setUpdateState({ state: 'error', error: err instanceof Error ? err.message : String(err), during: 'check' });
+  }
+  return updateState;
+}
+
+async function downloadUpdate() {
+  if (!latest || !latest.asset || updateState.state === 'downloading') return updateState;
+  setUpdateState({ state: 'downloading', progress: 0, error: undefined });
+  let last = 0;
+  try {
+    downloaded = await update.downloadAsset(fetch, latest.asset, path.dirname(LAUNCHER), (p) => {
+      if (p - last >= 0.01 || p === 1) { last = p; setUpdateState({ progress: p }); }
+    });
+    setUpdateState({ state: 'ready', progress: 1 });
+  } catch (err) {
+    setUpdateState({ state: 'error', error: err instanceof Error ? err.message : String(err), during: 'download' });
+  }
+  return updateState;
+}
+
+function installAndRestart() {
+  if (!downloaded || updateState.state !== 'ready') return updateState;
+  try {
+    const exe = update.installUpdate(LAUNCHER, downloaded);
+    // Yeni başlatıcı, program kapandıktan sonra yeni sürümü hazırlayıp açar
+    spawn(exe, ['--guncellendi'], { detached: true, stdio: 'ignore', cwd: path.dirname(exe) }).unref();
+    setImmediate(() => app.quit());
+    return { ...updateState, state: 'restarting' };
+  } catch (err) {
+    setUpdateState({ state: 'error', error: `Güncelleme uygulanamadı: ${err instanceof Error ? err.message : err}`, during: 'install' });
+    return updateState;
+  }
+}
+
+ipcMain.handle('update:state', () => updateState);
+ipcMain.handle('update:check', () => checkForUpdate());
+ipcMain.handle('update:download', () => downloadUpdate());
+ipcMain.handle('update:install', () => installAndRestart());
+ipcMain.handle('update:open-page', () => shell.openExternal(update.RELEASES_PAGE));
+
 function buildMenu() {
   const template = [
     {
@@ -174,6 +248,22 @@ function buildMenu() {
       label: 'Yardım',
       submenu: [
         {
+          label: 'Güncellemeleri denetle',
+          click: async () => {
+            if (!LAUNCHER) {
+              shell.openExternal(update.RELEASES_PAGE);
+              return;
+            }
+            const s = await checkForUpdate();
+            if (s.state === 'none') {
+              dialog.showMessageBox(mainWindow, { type: 'info', title: 'Güncelleme', message: 'Dolap güncel.', detail: `Kullandığınız sürüm: ${app.getVersion()}` });
+            } else if (s.state === 'error') {
+              dialog.showMessageBox(mainWindow, { type: 'warning', title: 'Güncelleme', message: 'Güncelleme denetlenemedi.', detail: s.error || '' });
+            }
+          },
+        },
+        { type: 'separator' },
+        {
           label: 'Hakkında',
           click: () => dialog.showMessageBox(mainWindow, {
             type: 'info',
@@ -198,13 +288,28 @@ app.on('second-instance', () => {
   mainWindow.focus();
 });
 
-app.whenReady().then(() => {
+function start() {
   if (!DEV_URL) createSplash();
   buildMenu();
   createWindow();
+  if (LAUNCHER) {
+    update.cleanupLeftovers(LAUNCHER);
+    // Açılış yavaşlamasın diye biraz sonra denetlenir
+    if (!process.env.DOLAP_NO_UPDATE_CHECK) setTimeout(() => { void checkForUpdate(); }, 4000);
+  }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+}
+
+app.whenReady().then(() => {
+  if (gotLock) { start(); return; }
+  if (!AFTER_UPDATE) return;
+  const deadline = Date.now() + 15000;
+  const timer = setInterval(() => {
+    gotLock = app.requestSingleInstanceLock();
+    if (gotLock) { clearInterval(timer); start(); } else if (Date.now() > deadline) { clearInterval(timer); app.quit(); }
+  }, 300);
 });
 
 app.on('window-all-closed', () => {

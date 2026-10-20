@@ -72,5 +72,6 @@ export const TOURS: Partial<Record<PageId, TourStep[]>> = {
     { target: 'settings-sheet', title: 'Plaka ve kesim', text: 'Plaka ölçüsü ve testere payı; kesim planı ve plaka sayısı buna göre hesaplanır.' },
     { target: 'settings-prices', title: 'Fiyatlar', text: 'Levha, bant ve hırdavat fiyatlarını girin. Teklif bu fiyatlardan hesaplanır; girilmeyen fiyat sıfır sayılır.' },
     { target: 'settings-quote', title: 'Teklif', text: 'İşçilik, kâr oranı ve KDV. Teklif PDF\'indeki toplam bunlarla bulunur.' },
+    { target: 'settings-update', title: 'Güncellemeler', text: 'Program açılışta GitHub\'da yeni sürüm olup olmadığına bakar. Yeni sürüm varsa üstte şerit çıkar; indirip yeniden başlatınca projeleriniz korunarak güncellenir.' },
   ],
 };
