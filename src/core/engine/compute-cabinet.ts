@@ -311,7 +311,8 @@ export function computeCabinet(cab: CabinetState, opts: ComputeOptions = {}): Co
     const backW = calcBackWidth(nailed ? W : Wi, t, cab.backType, cab.backChannelDepth);
     const backH = calcBackHeight(nailed ? H : Hfi, t, cab.assemblyType, cab.backType, cab.backChannelDepth, withRails);
     parts.push({
-      id: 'back', code: `${cab.code}-ARKALIK`, name: cab.backPanelCutout ? 'Arkalık (tesisat kesikli)' : 'Arkalık',
+      // Arkalık tipi adında yazar; atölyede kanala mı girecek, arkaya mı çakılacak karışmasın
+      id: 'back', code: `${cab.code}-ARKALIK`, name: `Arkalık (${nailed ? 'çakma' : 'kanallı'}${cab.backPanelCutout ? ', tesisat kesikli' : ''})`,
       group: 'body', material: 'back',
       length: backW.value, width: backH.value, thickness: cab.backThickness, quantity: 1, bands: NO_BANDS, trace: backW.trace,
     });

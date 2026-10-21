@@ -172,6 +172,12 @@ export function nextCabinetCode(existingCodes: string[]): string {
   return `M${String(max + 1).padStart(2, '0')}`;
 }
 
+/**
+ * Programda yeni açılan dolapların başlangıç ayarı: çakma arkalık, 3 mm.
+ * (DEFAULT_CABINET hesap motorunun genel varsayılanıdır; kayıtlı dolaplar kendi arkalık tipini korur.)
+ */
+export const NEW_CABINET_BASE: CabinetState = { ...DEFAULT_CABINET, backType: 'nailed', backThickness: 3 };
+
 export function createProjectCabinet(params: {
   id: string;
   type: CabinetType;
@@ -182,7 +188,7 @@ export function createProjectCabinet(params: {
   height?: number;
   base?: CabinetState;
 }): ProjectCabinet {
-  const preset = applyTypePreset(params.base ?? DEFAULT_CABINET, params.type, params.width);
+  const preset = applyTypePreset(params.base ?? NEW_CABINET_BASE, params.type, params.width);
   if (params.height) preset.height = params.height;
   return {
     ...preset,

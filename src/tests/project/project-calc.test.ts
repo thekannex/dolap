@@ -29,7 +29,7 @@ const cabinets = () => [
 describe('computeProject', () => {
   it('levhalara göre gruplar ve sıralar (gövde, ön, arka)', () => {
     const r = computeProject({ cabinets: cabinets() }, priced);
-    expect(r.groups.map((g) => g.key)).toEqual(['body-18', 'front-18', 'back-8']);
+    expect(r.groups.map((g) => g.key)).toEqual(['body-18', 'front-18', 'back-3']);
     expect(r.groups[0].label).toBe('Suntalam 18mm');
     expect(r.totals.cabinetCount).toBe(3); // dolgu sayılmaz
     expect(r.totals.sheetCount).toBe(r.groups.reduce((s, g) => s + g.optimization.totalSheets, 0));

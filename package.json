@@ -2,7 +2,7 @@
   "name": "dolap",
   "productName": "Dolap",
   "private": true,
-  "version": "1.18.1",
+  "version": "1.18.2",
   "description": "Mobilya ölçü çıkarma, kesim listesi, plaka planı ve teklif hazırlama",
   "author": "Dolap",
   "type": "module",

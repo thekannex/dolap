@@ -410,3 +410,14 @@ describe('computeCabinet — çakma arkalık', () => {
     expect(computeCabinet(cab).parts.find((p) => p.id === 'back')!.length).toBeLessThan(800 - 18);
   });
 });
+
+describe('yeni dolabın arkalığı', () => {
+  it('programda açılan dolap çakma 3 mm arkalıkla başlar; parça adında tip yazar', async () => {
+    const { createProjectCabinet } = await import('../../core/engine/cabinet-factory');
+    const cab = createProjectCabinet({ id: 'x', type: 'wardrobe', width: 1000, code: 'M01' });
+    expect(cab).toMatchObject({ backType: 'nailed', backThickness: 3 });
+    const back = computeCabinet({ ...cab, height: 2000, depth: 400, plinthHeight: 0 }).parts.find((p) => p.id === 'back')!;
+    expect(back).toMatchObject({ name: 'Arkalık (çakma)', length: 996, width: 1996, thickness: 3 });
+    expect(computeCabinet(base({ backType: 'routed' })).parts.find((p) => p.id === 'back')!.name).toBe('Arkalık (kanallı)');
+  });
+});
