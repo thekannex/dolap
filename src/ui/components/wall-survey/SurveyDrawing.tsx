@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import type { Obstacle, WallSurvey } from '../../../core/models/project';
+import type { Obstacle, SideObstacle, WallSurvey } from '../../../core/models/project';
 import { analyzeWall, angleSlope, interpolate } from '../../../core/layout/wall-survey';
 import type { WallAnalysisOptions } from '../../../core/layout/wall-survey';
 import { WALL_SHAPE_TYPES } from '../../../core/layout/wall-fit';
@@ -26,7 +26,7 @@ function exaggerate(s: WallSurvey, k: number, refTop: number): WallSurvey {
 }
 
 /** Duvarın önden ve üstten çizimi: tavan ve zemin profili, yan duvarlar, dolap sığan alan, kama boşluklar. */
-export default function SurveyDrawing({ survey, opts, obstacles }: { survey: WallSurvey; opts: WallAnalysisOptions; obstacles: Obstacle[] }) {
+export default function SurveyDrawing({ survey, opts, obstacles, sideObstacles = [] }: { survey: WallSurvey; opts: WallAnalysisOptions; obstacles: Obstacle[]; sideObstacles?: SideObstacle[] }) {
   const [k, setK] = useState(10);
   const real = useMemo(() => analyzeWall(survey, opts), [survey, opts]);
   const refTop = real.baseLevel + real.height;
@@ -46,7 +46,7 @@ export default function SurveyDrawing({ survey, opts, obstacles }: { survey: Wal
   const planTop = Y(minFloor) + fs * 5;
   const D = opts.depth;
   const Z = (z: number) => planTop + z;
-  const zMax = D * 1.6;
+  const zMax = Math.max(D * 1.6, ...sideObstacles.map((o) => o.x + o.width + 150));
   const sL = angleSlope(s.leftAngle);
   const sR = angleSlope(s.rightAngle);
 
@@ -97,6 +97,16 @@ export default function SurveyDrawing({ survey, opts, obstacles }: { survey: Wal
               strokeDasharray={o.type === 'recess' ? `${fs * 0.5},${fs * 0.3}` : undefined} />;
           })}
 
+          {/* Yan duvar engelleri (önden izdüşüm, köşede) */}
+          {sideObstacles.filter((o) => o.depth > 0).map((o) => {
+            const w = o.depth;
+            const x = o.side === 'left' ? 0 : L - w;
+            return <rect key={`fv-${o.id}`} x={x} y={Y(o.y + o.height)} width={w} height={o.height}
+              fill="#78716c" fillOpacity={0.25} stroke="#57534e" strokeWidth={fs * 0.06} strokeDasharray={`${fs * 0.3},${fs * 0.2}`}>
+              <title>Yan duvardaki engel (köşeden {o.x} mm)</title>
+            </rect>;
+          })}
+
           {/* Dolabın sığdığı alan (terazide) */}
           {a.width > 0 && (
             <g>
@@ -139,6 +149,17 @@ export default function SurveyDrawing({ survey, opts, obstacles }: { survey: Wal
               <path d={`M ${L - Math.max(0, s.rightLean)} ${Z(0)} L ${a.x1} ${Z(0)} L ${a.x1} ${Z(D)} L ${L - D * sR} ${Z(D)} Z`} fill="#a855f7" fillOpacity={0.35} />
             </>
           )}
+          {/* Yan duvar engelleri, yan duvar boyunca */}
+          {sideObstacles.map((o) => {
+            const sl = o.side === 'left' ? sL : sR;
+            const at = (z: number) => (o.side === 'left' ? z * sl : L - z * sl);
+            const off = o.side === 'left' ? o.depth : -o.depth;
+            const z0 = o.x;
+            const z1 = o.x + o.width;
+            const pts = [[at(z0), Z(z0)], [at(z1), Z(z1)], [at(z1) + off, Z(z1)], [at(z0) + off, Z(z0)]];
+            return <polygon key={`pv-${o.id}`} points={pts.map((p) => p.join(',')).join(' ')}
+              fill={o.depth > 0 ? '#78716c' : '#f59e0b'} fillOpacity={0.6} stroke="#44403c" strokeWidth={fs * 0.06} />;
+          })}
           <text x={0} y={Z(zMax) + fs * 1.2} fontSize={fs * 0.8} fill="#78716c">sol köşe {formatNumber(survey.leftAngle)}°</text>
           <text x={L} y={Z(zMax) + fs * 1.2} textAnchor="end" fontSize={fs * 0.8} fill="#78716c">sağ köşe {formatNumber(survey.rightAngle)}°</text>
         </svg>

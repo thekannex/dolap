@@ -1,5 +1,5 @@
 import type { CabinetType, ProjectCabinet } from '../models/cabinet';
-import type { Obstacle, Project } from '../models/project';
+import type { Obstacle, Project, SideObstacle } from '../models/project';
 import { placeWallCabinets } from './wall-elevation';
 
 /** Mutfak dolaplarının ayak yüksekliği (mm). */
@@ -48,6 +48,8 @@ export interface SceneWall {
   height: number;
   /** Duvarın şekli ve engelleri (yalnızca gerçek duvarlarda). */
   obstacles: Obstacle[];
+  /** Yan duvarlar: sağ köşenin x'i, köşe açıları ve engelleri (yalnızca gerçek duvarlarda). */
+  sides?: { length: number; leftAngle: number; rightAngle: number; obstacles: SideObstacle[] };
 }
 
 export interface SceneLayout {
@@ -105,7 +107,14 @@ export function layoutScene(project: Pick<Project, 'spaces' | 'cabinets'> & Part
         });
       }
       const width = Math.max(wall.effectiveWidth, ...placed.map((p) => p.x + p.width), ...fitted.map((b) => (b.x ?? 0) + b.width));
-      walls.push({ id: wall.id, name: `${space.name} · ${wall.name}`, x: cursor, width, height: wallHeight, obstacles: wall.obstacles });
+      walls.push({
+        id: wall.id, name: `${space.name} · ${wall.name}`, x: cursor, width, height: wallHeight, obstacles: wall.obstacles,
+        sides: {
+          length: wall.survey?.length ?? wall.effectiveWidth,
+          leftAngle: wall.survey?.leftAngle ?? 90, rightAngle: wall.survey?.rightAngle ?? 90,
+          obstacles: wall.sideObstacles ?? [],
+        },
+      });
       cursor += width + WALL_GAP;
     }
   }

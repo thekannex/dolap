@@ -10,7 +10,7 @@ import { projectForJob } from '../../../core/project/jobs';
 import JobScopeSelect from '../shared/JobScopeSelect';
 import type { ProjectCabinet } from '../../../core/models/cabinet';
 import { Button, EmptyState, Toggle } from '../shared/ui';
-import { Board, CabinetModel, SinkModel, WallModel } from './models';
+import { Board, CabinetModel, SideWalls, SinkModel, WallModel } from './models';
 import { S } from './scale';
 
 
@@ -24,6 +24,9 @@ function SetScene({ layout, cabinets, showFronts, activeId, onSelect }: {
         <group key={w.id}>
           <group position={[w.x / S, 0, 0]}>
             <WallModel width={w.width} height={w.height} obstacles={w.obstacles} />
+            {w.sides && (w.sides.obstacles.length > 0 || w.sides.leftAngle !== 90 || w.sides.rightAngle !== 90) && (
+              <SideWalls length={w.sides.length} height={w.height} leftAngle={w.sides.leftAngle} rightAngle={w.sides.rightAngle} obstacles={w.sides.obstacles} />
+            )}
           </group>
           <Html position={[w.x / S, w.height / S + 0.5, 0]} style={{ pointerEvents: 'none' }}>
             <div className="whitespace-nowrap text-xs font-semibold text-[#57534e] bg-white/80 rounded px-1.5 py-0.5">{w.name}</div>

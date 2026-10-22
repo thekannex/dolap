@@ -64,6 +64,16 @@ export interface Wall {
   survey?: WallSurvey | null;
   /** Otomatik yerleşim uygulandığında duvarın ölçü izi (sonradan değişti mi anlamak için). */
   planSig?: string | null;
+  /** Sol ve sağ yan duvardaki engeller (kolon, boru, kasa…); köşeye yakınsa dolabı etkiler. */
+  sideObstacles?: SideObstacle[];
+}
+
+/**
+ * Yan duvardaki engel. x: köşeden yan duvar boyunca odaya doğru uzaklık, width: yan duvar boyunca eni,
+ * y/height: yerden ve boyu, depth: yan duvardan odaya taşması.
+ */
+export interface SideObstacle extends Obstacle {
+  side: 'left' | 'right';
 }
 
 /** Duvar boyunca bir ölçü noktası: x sol köşeden (mm), v ölçülen değer (mm). */

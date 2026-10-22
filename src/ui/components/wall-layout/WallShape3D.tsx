@@ -9,7 +9,7 @@ import type { Obstacle, Wall } from '../../../core/models/project';
 import { defaultShape, fitWall, wallHeightOf, DEFAULT_FIT_OPTIONS } from '../../../core/layout/wall-fit';
 import { wallRange } from '../../../core/layout/wall-survey';
 import type { FitRegion } from '../../../core/layout/wall-fit';
-import { CabinetModel, WallModel } from '../cabinet-3d/models';
+import { CabinetModel, SideWalls, WallModel } from '../cabinet-3d/models';
 import { S } from '../cabinet-3d/scale';
 import { Button, NumInput, Section } from '../shared/ui';
 import { OBSTACLE_TYPES, obstacleInfo } from './obstacle-types';
@@ -151,6 +151,8 @@ export default function WallShape3D({ wall }: { wall: Wall }) {
           <directionalLight position={[-10, 10, 10]} intensity={0.3} />
           <group onPointerDown={startRegion}>
             <WallModel width={L} height={H} obstacles={obstacles} selectedId={selectedId} onObstacleDown={startObstacle} onObstacleHover={setOverObstacle} />
+            <SideWalls length={L} height={H} leftAngle={wall.survey?.leftAngle} rightAngle={wall.survey?.rightAngle}
+              obstacles={wall.sideObstacles} reach={Math.max(1200, region.depth * 1.6)} />
           </group>
           {/* Sürüklerken imleci yakalayan görünmez duvar düzlemi */}
           {drag && (

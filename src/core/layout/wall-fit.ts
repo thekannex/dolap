@@ -1,6 +1,6 @@
 import type { Obstacle, Wall } from '../models/project';
 import type { BoxContent } from './composition';
-import { wallRange } from './wall-survey';
+import { sideObstaclesOnWall, wallRange, SIDE_BLOCK } from './wall-survey';
 
 /**
  * Duvar şekli ve duvara oturan dolap hesabı.
@@ -15,7 +15,7 @@ import { wallRange } from './wall-survey';
 /** Duvarın kendi şekli: kolon, kiriş, çıkıntı, girinti. */
 export const WALL_SHAPE_TYPES: ReadonlySet<string> = new Set(['column', 'beam', 'protrusion', 'recess']);
 /** Önüne dolap konamayan engeller (alanında hiç kutu çıkmaz). */
-const BLOCKING_TYPES: ReadonlySet<string> = new Set(['window', 'door', 'appliance']);
+const BLOCKING_TYPES: ReadonlySet<string> = new Set(['window', 'door', 'appliance', SIDE_BLOCK]);
 /** Dolabı etkilemeyen küçük tesisat noktaları (arkalıktan delik açılır). */
 const POINT_TYPES: ReadonlySet<string> = new Set(['outlet', 'water_inlet', 'drain', 'gas']);
 
@@ -103,7 +103,7 @@ const sameCell = (a: Cell, b: Cell) => a.kind === b.kind && Math.abs(a.depth - b
 
 /** Alanı duvar şekline göre kutulara böler. */
 export function fitWall(
-  wall: Pick<Wall, 'effectiveWidth' | 'heightLeft' | 'heightCenter' | 'heightRight' | 'obstacles'> & Partial<Pick<Wall, 'survey' | 'installGap'>>,
+  wall: Pick<Wall, 'effectiveWidth' | 'heightLeft' | 'heightCenter' | 'heightRight' | 'obstacles'> & Partial<Pick<Wall, 'survey' | 'installGap' | 'sideObstacles'>>,
   regionIn: FitRegion,
   optsIn: Partial<FitOptions> = {},
 ): FitResult {
@@ -125,7 +125,8 @@ export function fitWall(
   }
   if (region.width < EPS || region.height < EPS || region.depth < EPS) return { region, boxes: [], blocked: [], warnings };
 
-  const obs = wall.obstacles
+  // Yan duvar engelleri dolabın derinliğine giriyorsa o yanı kapatır
+  const obs = [...wall.obstacles, ...sideObstaclesOnWall(wall, regionIn.depth)]
     .map((ob) => ({ ...ob, p: protrusionOf(ob) }))
     .filter((ob) => ob.p > 0 && ob.x < x1 - EPS && ob.x + ob.width > x0 + EPS && ob.y < y1 - EPS && ob.y + ob.height > y0 + EPS);
 

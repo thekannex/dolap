@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, Plus, Ruler } from 'lucide-react';
 import { useUIStore } from '../../../stores/ui-store';
 import { useActiveJob, useActiveWall, useProjectStore } from '../../../stores/project-store';
-import { analyzeWall, surveyOf } from '../../../core/layout/wall-survey';
+import { analyzeWall, sideObstaclesOnWall, surveyOf } from '../../../core/layout/wall-survey';
 import WallPicker from '../wall-layout/WallPicker';
 import ObstacleEditor from '../wall-layout/ObstacleEditor';
 import { Button, EmptyState, NumInput } from '../shared/ui';
@@ -58,7 +58,7 @@ export default function WallSurveyPage() {
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <WallChangeNotice wall={wall} />
-        <SurveyDrawing survey={survey} opts={opts} obstacles={wall.obstacles} />
+        <SurveyDrawing survey={survey} opts={opts} obstacles={wall.obstacles} sideObstacles={wall.sideObstacles} />
       </div>
 
       <aside className="w-80 shrink-0 h-full overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-bg-card)] p-3 flex flex-col gap-2">
@@ -67,7 +67,7 @@ export default function WallSurveyPage() {
           <NumInput label="Baza / ayak" value={base} onChange={setBase} max={300} hint="En yüksek zemin noktasında" />
           <NumInput label="Dolap üst kotu" value={top} onChange={setTop} max={6000} hint="Terazideki tabandan; 0 = en alçak tavana kadar" />
         </div>
-        <SurveyResults a={analysis} />
+        <SurveyResults a={analysis} sideBlocks={sideObstaclesOnWall(wall, depth)} length={survey.length} />
         <Button variant="primary" onClick={() => setActivePage(next)}>
           Sonraki adım: {job?.kind === 'built_in' ? 'Duvar şekli ve dolap alanı' : 'Yerleşim'} <ArrowRight size={14} />
         </Button>

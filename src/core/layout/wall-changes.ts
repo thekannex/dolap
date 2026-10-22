@@ -3,7 +3,7 @@ import type { ProjectCabinet } from '../models/cabinet';
 import { placeWallCabinets } from './wall-elevation';
 import { elevationFor } from './scene-layout';
 import { protrusionOf } from './wall-fit';
-import { wallRange, wallSignature } from './wall-survey';
+import { sideObstaclesOnWall, wallRange, wallSignature, SIDE_BLOCK } from './wall-survey';
 
 /**
  * Dolaplar kurulduktan sonra duvar ölçüsü ya da engeller değişti mi, mevcut dolaplar yeni duruma uyuyor mu.
@@ -29,11 +29,11 @@ export function kitchenWallStatus(wall: Wall, cabinets: ProjectCabinet[]): { cha
     const y1 = y0 + cab.height;
     const x0 = p.x;
     const x1 = p.x + p.width;
-    for (const o of wall.obstacles) {
+    for (const o of [...wall.obstacles, ...sideObstaclesOnWall(wall, cab.depth)]) {
       const pr = protrusionOf(o);
       if (pr <= 0 || o.type === 'appliance') continue;
       if (x0 < o.x + o.width - 0.5 && x1 > o.x + 0.5 && y0 < o.y + o.height - 0.5 && y1 > o.y + 0.5) {
-        conflicts.push({ cabinetId: cab.id, code: cab.code, reason: `engelle çakışıyor (${o.type === 'window' ? 'pencere' : o.type === 'door' ? 'kapı' : 'duvar çıkıntısı'})` });
+        conflicts.push({ cabinetId: cab.id, code: cab.code, reason: `engelle çakışıyor (${o.type === SIDE_BLOCK ? 'yan duvardaki engel' : o.type === 'window' ? 'pencere' : o.type === 'door' ? 'kapı' : 'duvar çıkıntısı'})` });
         break;
       }
     }

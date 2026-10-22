@@ -1,4 +1,4 @@
-import type { Wall, WallSurvey, SurveyPoint } from '../models/project';
+import type { Obstacle, Wall, WallSurvey, SurveyPoint } from '../models/project';
 
 /**
  * Düzensiz duvarın ayrıntılı ölçüsü ve bundan çıkan sonuçlar.
@@ -202,8 +202,43 @@ export function wallSignature(wall: Wall): string {
     s: wall.survey ?? null,
     w: [wall.widthLeft, wall.widthCenter, wall.widthRight, wall.heightLeft, wall.heightCenter, wall.heightRight, wall.installGap],
     o: [...wall.obstacles].sort((a, b) => a.id.localeCompare(b.id)).map((o) => [o.type, o.x, o.y, o.width, o.height, o.depth]),
+    y: [...(wall.sideObstacles ?? [])].sort((a, b) => a.id.localeCompare(b.id)).map((o) => [o.side, o.type, o.x, o.y, o.width, o.height, o.depth]),
   });
   let h = 5381;
   for (let i = 0; i < data.length; i++) h = ((h << 5) + h + data.charCodeAt(i)) | 0;
   return (h >>> 0).toString(36);
+}
+
+/** Önüne dolap konamayan yan duvar engeli türü (ana duvar koordinatına çevrilmiş). */
+export const SIDE_BLOCK = 'side-block';
+/** Yan duvarda dolabı etkilemeyen tesisat noktaları. */
+const SIDE_POINT_TYPES: ReadonlySet<string> = new Set(['outlet', 'water_inlet', 'drain', 'gas']);
+
+/**
+ * Yan duvar engellerini ana duvar koordinatına çevirir: engel dolabın derinliğine (0..depth) giriyorsa,
+ * o yükseklikte köşeden engelin ucuna kadar olan bölge kapalı sayılır (dolap o yana kadar gelemez).
+ */
+export function sideObstaclesOnWall(
+  wall: Pick<Wall, 'effectiveWidth' | 'sideObstacles'> & Partial<Pick<Wall, 'survey'>>,
+  depth: number,
+): Obstacle[] {
+  const list = wall.sideObstacles ?? [];
+  if (list.length === 0) return [];
+  const L = wall.survey?.length ?? wall.effectiveWidth;
+  const sL = angleSlope(wall.survey?.leftAngle ?? 90);
+  const sR = angleSlope(wall.survey?.rightAngle ?? 90);
+  const out: Obstacle[] = [];
+  for (const o of list) {
+    if (SIDE_POINT_TYPES.has(o.type) || o.depth <= 0) continue;
+    const z0 = Math.max(0, o.x);
+    const z1 = Math.min(depth, o.x + o.width);
+    if (z1 <= z0) continue; // dolabın önünde kalıyor
+    const reach = Math.max(z0, z1) * (o.side === 'left' ? sL : sR);
+    const span = Math.max(0, Math.max(z0 * (o.side === 'left' ? sL : sR), reach)) + o.depth;
+    out.push({
+      id: `yan-${o.id}`, wallId: o.wallId, type: SIDE_BLOCK, depth: 0,
+      x: o.side === 'left' ? 0 : r1(L - span), y: o.y, width: r1(span), height: o.height,
+    });
+  }
+  return out;
 }

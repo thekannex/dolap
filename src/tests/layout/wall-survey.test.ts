@@ -124,3 +124,39 @@ describe('duvar değişikliği denetimi', () => {
     expect(r.boxes[0].x).toBe(20);
   });
 });
+
+describe('yan duvar engelleri', () => {
+  const side = (s: 'left' | 'right', x: number, width: number, depth: number, y = 0, height = 2600, type = 'column') =>
+    ({ id: `${s}-${x}`, wallId: 'w', side: s, type, x, y, width, height, depth });
+
+  it('köşedeki kolon dolabı içeri iter; dolabın önünde kalan engel etkilemez', async () => {
+    const { fitWall } = await import('../../core/layout/wall-fit');
+    const { sideObstaclesOnWall } = await import('../../core/layout/wall-survey');
+    const base = { ...createWall('w', 's', 'A'), installGap: 0, survey: square() };
+    const w = { ...base, sideObstacles: [side('left', 0, 300, 120), side('right', 700, 300, 150)] };
+    expect(sideObstaclesOnWall(w, 600).map((o) => [o.x, o.width])).toEqual([[0, 120]]);
+    const r = fitWall(w, { x: 0, y: 0, width: 3000, height: 2600, depth: 600 });
+    expect(r.boxes[0].x).toBe(120);
+    expect(r.blocked[0]).toMatchObject({ x: 0, width: 120 });
+  });
+
+  it('yalnızca bir yükseklikte olan engel (boru dirseği) o bandı kapatır', async () => {
+    const { fitWall } = await import('../../core/layout/wall-fit');
+    const w = { ...createWall('w', 's', 'A'), installGap: 0, survey: square(), sideObstacles: [side('right', 100, 200, 80, 2000, 600, 'pipe')] };
+    const r = fitWall(w, { x: 0, y: 0, width: 3000, height: 2600, depth: 600 });
+    expect(r.blocked).toEqual([{ x: 2920, y: 2000, width: 80, height: 600 }]);
+  });
+
+  it('açılı yan duvarda engel ucu açıya göre hesaplanır; priz etkilemez', async () => {
+    const { sideObstaclesOnWall } = await import('../../core/layout/wall-survey');
+    const w = { ...createWall('w', 's', 'A'), survey: square({ leftAngle: 85 }), sideObstacles: [side('left', 0, 400, 100), side('left', 0, 80, 30, 300, 80, 'outlet')] };
+    const [o] = sideObstaclesOnWall(w, 600);
+    expect(o.width).toBeCloseTo(400 * 0.0875 + 100, 0);
+    expect(sideObstaclesOnWall(w, 600)).toHaveLength(1);
+  });
+
+  it('yan duvar engeli değişince ölçü izi değişir', () => {
+    const w = createWall('w', 's', 'A');
+    expect(wallSignature({ ...w, sideObstacles: [side('left', 0, 300, 120)] })).not.toBe(wallSignature(w));
+  });
+});

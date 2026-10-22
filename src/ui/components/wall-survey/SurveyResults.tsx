@@ -1,4 +1,5 @@
 import type { WallAnalysis } from '../../../core/layout/wall-survey';
+import type { Obstacle } from '../../../core/models/project';
 import { formatNumber } from '../../../core/utils/format';
 import { Section } from '../shared/ui';
 
@@ -20,7 +21,7 @@ function Table({ head, rows }: { head: string[]; rows: Array<Array<string | numb
 }
 
 /** Ölçüden çıkan dört sonuç: dolap sığan alan, kama dolgular, baza/ayak ve tavan kapama. */
-export default function SurveyResults({ a }: { a: WallAnalysis }) {
+export default function SurveyResults({ a, sideBlocks = [], length }: { a: WallAnalysis; sideBlocks?: Obstacle[]; length: number }) {
   return (
     <div className="flex flex-col gap-1" data-tour="survey-results">
       <Section title="Dolabın sığdığı alan">
@@ -30,6 +31,12 @@ export default function SurveyResults({ a }: { a: WallAnalysis }) {
           göre durur{a.baseLevel !== 0 ? ` (sol köşeden ${n(a.baseLevel)} mm yukarıda)` : ''}. Mutfak önerisi ve duvar dolabı bu alanı kullanır.
         </p>
         {a.warnings.map((w) => <p key={w} className="text-xs text-[var(--color-warning)]">{w}</p>)}
+        {sideBlocks.map((b) => (
+          <p key={b.id} className="text-xs text-[var(--color-warning)]">
+            {b.x === 0 ? 'Sol' : 'Sağ'} yan duvardaki engel dolabın derinliğine giriyor: yerden {n(b.y)}–{n(b.y + b.height)} mm arasında
+            dolap {b.x === 0 ? 'soldan' : 'sağdan'} {n(b.x === 0 ? b.width : length - b.x)} mm içeriden başlar (duvar dolabı bunu kendiliğinden hesaba katar).
+          </p>
+        ))}
       </Section>
 
       <Section title="Kama dolgular (yan duvarlar)">

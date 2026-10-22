@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import type { ThreeEvent } from '@react-three/fiber';
+import { Edges } from '@react-three/drei';
 import { COUNTERTOP_THICKNESS, COUNTERTOP_OVERHANG } from '../../../core/layout/scene-layout';
 import { useCabinetCalculations } from '../../hooks/use-cabinet-calculations';
 import { hasRails, jointsOf } from '../../../core/engine/compute-cabinet';
 import type { ProjectCabinet } from '../../../core/models/cabinet';
-import type { Obstacle } from '../../../core/models/project';
+import type { Obstacle, SideObstacle } from '../../../core/models/project';
 import { protrusionOf } from '../../../core/layout/wall-fit';
 import { S } from './scale';
 
@@ -272,6 +273,54 @@ export function WallModel({ width, height, obstacles, selectedId, onObstacleDown
             <boxGeometry args={[w, h, d]} />
             <meshStandardMaterial color={sel ? '#fb923c' : o.type === 'pipe' ? '#a1a1aa' : '#d6d3d1'} />
           </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+/**
+ * Sol ve sağ yan duvarlar, ana duvara bağlandıkları açıyla; üzerlerindeki engeller (kolon, boru, kasa…) kutu olarak.
+ * Yerel koordinat WallModel ile aynı: ana duvarın sol alt köşesi orijin, oda +z yönünde. length: sağ köşenin x'i.
+ */
+export function SideWalls({ length, height, leftAngle = 90, rightAngle = 90, obstacles = [], reach = 1200, opacity = 0.45 }: {
+  length: number; height: number; leftAngle?: number; rightAngle?: number; obstacles?: SideObstacle[]; reach?: number; opacity?: number;
+}) {
+  const sides = [
+    { side: 'left' as const, a: (leftAngle * Math.PI) / 180, ox: 0 },
+    { side: 'right' as const, a: (rightAngle * Math.PI) / 180, ox: length },
+  ];
+  const H = height / S;
+  return (
+    <group>
+      {sides.map(({ side, a, ox }) => {
+        const mine = obstacles.filter((o) => o.side === side);
+        const len = Math.max(reach, ...mine.map((o) => o.x + o.width + 200)) / S;
+        // Yan duvar doğrultusu (x,z) ve odaya bakan yüzün normali
+        const dir = side === 'left' ? [Math.cos(a), Math.sin(a)] : [-Math.cos(a), Math.sin(a)];
+        const n = side === 'left' ? [Math.sin(a), -Math.cos(a)] : [-Math.sin(a), -Math.cos(a)];
+        const rot = side === 'left' ? -a : Math.PI + a;
+        const at = (d: number, off: number): [number, number] => [ox / S + dir[0] * d + n[0] * off, dir[1] * d + n[1] * off];
+        const [cx, cz] = at(len / 2, -WALL_T / 2);
+        return (
+          <group key={side}>
+            <mesh position={[cx, H / 2, cz]} rotation={[0, rot, 0]} receiveShadow raycast={() => null}>
+              <boxGeometry args={[len, H, WALL_T]} />
+              <meshStandardMaterial color="#e7e5e4" transparent opacity={opacity} depthWrite={false} />
+            </mesh>
+            {mine.map((o) => {
+              const p = Math.max(10, o.depth) / S;
+              const [x, z] = at((o.x + o.width / 2) / S, p / 2);
+              const point = o.depth <= 0;
+              return (
+                <mesh key={o.id} position={[x, (o.y + o.height / 2) / S, z]} rotation={[0, rot, 0]} castShadow raycast={() => null}>
+                  <boxGeometry args={[Math.max(o.width, 10) / S, Math.max(o.height, 10) / S, point ? 0.02 : p]} />
+                  <meshStandardMaterial color={point ? '#f59e0b' : o.type === 'pipe' ? '#71717a' : '#a8a29e'} />
+                  <Edges color="#44403c" />
+                </mesh>
+              );
+            })}
+          </group>
         );
       })}
     </group>
