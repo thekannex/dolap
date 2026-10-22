@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type PageId = 'projects' | 'project' | 'wall-layout' | 'wall-shape' | 'composer' | 'editor' | 'cut-list' | '3d-preview' | 'settings';
+export type PageId = 'projects' | 'project' | 'wall-survey' | 'wall-layout' | 'wall-shape' | 'composer' | 'editor' | 'cut-list' | '3d-preview' | 'settings';
 
 export interface Toast {
   id: number;

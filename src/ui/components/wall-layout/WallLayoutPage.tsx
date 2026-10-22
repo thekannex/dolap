@@ -1,14 +1,15 @@
 import { ArrowLeft, Plus, MapPin } from 'lucide-react';
 import { useUIStore } from '../../../stores/ui-store';
 import { useActiveWall, useProjectStore } from '../../../stores/project-store';
-import WallMeasurementForm from './WallMeasurementForm';
+import WallSummary from '../wall-survey/WallSummary';
+import WallChangeNotice from '../wall-survey/WallChangeNotice';
 import ObstacleEditor from './ObstacleEditor';
 import WallPlanPanel from './WallPlanPanel';
 import WallLayoutView from './WallLayoutView';
 import WallPicker from './WallPicker';
 import { Button, EmptyState } from '../shared/ui';
 
-/** Mutfak işi, 1. adım: duvar ölçüsü, cihazlar ve otomatik alt/üst dolap önerisi. */
+/** Mutfak işi, 2. adım: cihazlar ve otomatik alt/üst dolap önerisi (duvar ölçüsü 1. adımda). */
 export default function WallLayoutPage() {
   const setActivePage = useUIStore((s) => s.setActivePage);
   const addWall = useProjectStore((s) => s.addWall);
@@ -29,11 +30,12 @@ export default function WallLayoutPage() {
           <ArrowLeft size={14} /> Projeye dön
         </Button>
         <WallPicker activeId={wall.id} />
-        <WallMeasurementForm wall={wall} />
+        <WallSummary wall={wall} />
         <WallPlanPanel wall={wall} />
         <ObstacleEditor wall={wall} />
       </aside>
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        <WallChangeNotice wall={wall} />
         <WallLayoutView wall={wall} />
       </div>
     </div>

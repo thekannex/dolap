@@ -1,8 +1,9 @@
 import { create } from 'zustand';
-import type { Composition, JobKind, Project, Space, Wall, Obstacle } from '../core/models/project';
+import type { Composition, JobKind, Project, Space, Wall, WallSurvey, Obstacle } from '../core/models/project';
 import { applyBoxContent, boxContentLabel, checkSharing, detectBoxContent, COMPOSITION_TEMPLATES } from '../core/layout/composition';
 import type { BoxContent } from '../core/layout/composition';
-import { fitBoxContent } from '../core/layout/wall-fit';
+import { fitBoxContent, fitWall } from '../core/layout/wall-fit';
+import { legacyFieldsFromSurvey, wallRange, wallSignature } from '../core/layout/wall-survey';
 import type { FitBox } from '../core/layout/wall-fit';
 import type { CabinetType, ProjectCabinet } from '../core/models/cabinet';
 import type { PlannedModule } from '../core/layout/module-planner';
@@ -50,6 +51,14 @@ export interface ProjectStore {
   /** Duvar ekler ve seçer. spaceId verilmezse ilk mekâna (yoksa yeni bir mekâna) eklenir. */
   addWall: (spaceId?: string | null, name?: string) => string | null;
   updateWall: (id: string, updates: Partial<Wall>) => void;
+  /** Ayrıntılı duvar ölçüsünü kaydeder (null: kaldırır); genişlik ve yükseklik alanları bundan hesaplanır. */
+  setWallSurvey: (id: string, survey: WallSurvey | null) => void;
+  /** Duvar değişikliğinden sonra mutfak dolaplarını olduğu gibi bırak (uyarıyı kapat). */
+  acknowledgeWallChange: (id: string) => void;
+  /** Duvar değişikliğinden sonra duvara oturan dolabı olduğu gibi bırak. */
+  acknowledgeFitChange: (compositionId: string) => void;
+  /** Duvara oturan dolabı güncel duvar ölçüsü ve engellerle yeniden üretir (elle yapılan değişiklikler gider). */
+  refitComposition: (compositionId: string) => number;
   removeWall: (id: string) => void;
 
   /** Engeli ekler, kimliğini döndürür. */
@@ -221,9 +230,38 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
     updateWall: (id, updates) => mutate((p) => mapWalls(p, (w) => {
       if (w.id !== id) return w;
       const updated = { ...w, ...updates };
+      if (updated.survey) return { ...updated, ...legacyFieldsFromSurvey(updated.survey, updated.installGap) };
       updated.effectiveWidth = effectiveWallWidth(updated);
       return updated;
     })),
+
+    setWallSurvey: (id, survey) => mutate((p) => mapWalls(p, (w) => {
+      if (w.id !== id) return w;
+      if (!survey) {
+        const next = { ...w, survey: null };
+        return { ...next, effectiveWidth: effectiveWallWidth(next) };
+      }
+      return { ...w, survey, ...legacyFieldsFromSurvey(survey, w.installGap) };
+    })),
+
+    acknowledgeWallChange: (id) => mutate((p) => mapWalls(p, (w) => (w.id === id ? { ...w, planSig: wallSignature(w) } : w))),
+
+    acknowledgeFitChange: (compositionId) => mutate((p) => {
+      const comp = p.compositions.find((c) => c.id === compositionId);
+      const wall = comp?.wallId ? p.spaces.flatMap((x) => x.walls).find((w) => w.id === comp.wallId) : undefined;
+      if (!comp?.fit || !wall) return p;
+      return { ...p, compositions: p.compositions.map((c) => (c.id === compositionId ? { ...c, fit: { ...c.fit!, wallSig: wallSignature(wall) } } : c)) };
+    }),
+
+    refitComposition: (compositionId) => {
+      const { project } = get();
+      const comp = project?.compositions.find((c) => c.id === compositionId);
+      const wall = comp?.wallId ? project?.spaces.flatMap((x) => x.walls).find((w) => w.id === comp.wallId) : undefined;
+      if (!project || !comp?.fit || !wall) return 0;
+      const r = fitWall(wall, comp.fit.region, { topHeight: comp.fit.topHeight, maxModule: comp.fit.maxModule });
+      get().createFittedComposition(wall.id, r.boxes, { ...comp.fit, region: r.region }, comp.id);
+      return r.boxes.length;
+    },
 
     removeWall: (id) => {
       const { project, activeWallId } = get();
@@ -338,6 +376,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
     applyWallPlan: (wallId, modules, opts) => {
       const { project } = get();
       if (!project) return 0;
+      const wallObj = project.spaces.flatMap((x) => x.walls).find((w) => w.id === wallId);
+      // Yan duvar şakulsüz ya da açılıysa dolaplar kullanılabilir aralığın başından dizilir
+      const startX = wallObj ? wallRange(wallObj).x0 : 0;
       let cabinets = opts.replace ? project.cabinets.filter((c) => c.wallId !== wallId) : [...project.cabinets];
       const added: ProjectCabinet[] = [];
       const codes = () => [...cabinets, ...added].map((c) => c.code);
@@ -347,7 +388,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
         for (const m of modules) {
           if (m.type === 'appliance') continue;
           const type: CabinetType = m.type === 'filler' ? 'filler' : row === 'wall' ? 'wall' : 'base';
-          const cab = createProjectCabinet({ id: uid(), type, width: m.width, code: nextCabinetCode(codes()), wallId, x: m.x });
+          const cab = createProjectCabinet({ id: uid(), type, width: m.width, code: nextCabinetCode(codes()), wallId, x: Math.round((m.x + startX) * 10) / 10 });
           cab.jobId = jobOfWall(project, wallId);
           if (row === 'wall' && type === 'filler') {
             cab.depth = 330;
@@ -357,7 +398,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
         }
       }
       cabinets = [...cabinets, ...added];
-      set({ project: { ...project, cabinets }, activeCabinetId: added[0]?.id ?? get().activeCabinetId });
+      // Hangi duvar ölçüsüyle yerleştirildiği saklanır; sonradan değişirse uyarı çıkar
+      const spaces = project.spaces.map((sp) => ({ ...sp, walls: sp.walls.map((w) => (w.id === wallId ? { ...w, planSig: wallSignature(w) } : w)) }));
+      set({ project: { ...project, cabinets, spaces }, activeCabinetId: added[0]?.id ?? get().activeCabinetId });
       return added.length;
     },
 
@@ -490,7 +533,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
         added.push(withInterior(cab));
       }
       cabinets = [...cabinets, ...added];
-      const comp: Composition = { id, name: existing?.name ?? `${wall.name} dolabı`, wallId, fit, jobId };
+      const comp: Composition = { id, name: existing?.name ?? `${wall.name} dolabı`, wallId, fit: { ...fit, wallSig: wallSignature(wall) }, jobId };
       const compositions = existing
         ? project.compositions.map((c) => (c.id === id ? comp : c))
         : [...project.compositions, comp];

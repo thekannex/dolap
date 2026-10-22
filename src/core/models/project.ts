@@ -34,7 +34,7 @@ export interface Composition {
   /** Duvara oturtulmuş dolapsa o duvar; kutuların x'i duvarın solundan ölçülür. */
   wallId?: string | null;
   /** Duvar şekline göre üretildiyse çizilen alan ve seçenekler (yeniden üretmek için). */
-  fit?: { region: { x: number; y: number; width: number; height: number; depth: number }; topHeight: number; maxModule: number } | null;
+  fit?: { region: { x: number; y: number; width: number; height: number; depth: number }; topHeight: number; maxModule: number; wallSig?: string } | null;
 }
 
 export interface Space {
@@ -60,6 +60,31 @@ export interface Wall {
   installGap: number;
   effectiveWidth: number;
   obstacles: Obstacle[];
+  /** Ayrıntılı (düzensiz duvar) ölçüsü; varsa genişlik ve yükseklik alanları bundan hesaplanır. */
+  survey?: WallSurvey | null;
+  /** Otomatik yerleşim uygulandığında duvarın ölçü izi (sonradan değişti mi anlamak için). */
+  planSig?: string | null;
+}
+
+/** Duvar boyunca bir ölçü noktası: x sol köşeden (mm), v ölçülen değer (mm). */
+export interface SurveyPoint {
+  x: number;
+  v: number;
+}
+
+export interface WallSurvey {
+  /** Köşeden köşeye duvar boyu, zemin hizasında. */
+  length: number;
+  /** Yan duvarın şakul sapması: tavana doğru dolap alanına kaçıklık (+ içeri, − dışarı). */
+  leftLean: number;
+  rightLean: number;
+  /** Köşe açısı (üstten bakış, derece): 90 dik; küçükse yan duvar odaya doğru içeri kapanır. */
+  leftAngle: number;
+  rightAngle: number;
+  /** Tavan yüksekliği (o noktada yerden). */
+  ceiling: SurveyPoint[];
+  /** Zemin seviye farkı (sol köşeye göre, + yüksek). */
+  floor: SurveyPoint[];
 }
 
 export interface Obstacle {

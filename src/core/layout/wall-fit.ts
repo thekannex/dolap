@@ -1,5 +1,6 @@
 import type { Obstacle, Wall } from '../models/project';
 import type { BoxContent } from './composition';
+import { wallRange } from './wall-survey';
 
 /**
  * Duvar şekli ve duvara oturan dolap hesabı.
@@ -25,16 +26,17 @@ export function protrusionOf(o: Pick<Obstacle, 'type' | 'depth'>): number {
   return Math.max(0, o.depth || 0);
 }
 
-/** Tavan yüksekliği: üç ölçünün en düşüğü (dolap en alçak noktaya sığmalı). */
-export function wallHeightOf(wall: Pick<Wall, 'heightLeft' | 'heightCenter' | 'heightRight'>): number {
+/** Tavan yüksekliği: üç ölçünün en düşüğü (dolap en alçak noktaya sığmalı). Ayrıntılı ölçüde terazideki tabandan en alçak tavana. */
+export function wallHeightOf(wall: Pick<Wall, 'heightLeft' | 'heightCenter' | 'heightRight'> & Partial<Pick<Wall, 'survey' | 'installGap' | 'effectiveWidth'>>): number {
+  if (wall.survey) return wallRange({ effectiveWidth: 0, installGap: 0, ...wall }).height;
   const hs = [wall.heightLeft, wall.heightCenter, wall.heightRight].filter((h) => h > 0);
   return hs.length > 0 ? Math.min(...hs) : 2600;
 }
 
 /** Duvar şekli engelinin varsayılan ölçüleri (duvarın boyuna göre). */
-export function defaultShape(type: string, wall: Pick<Wall, 'effectiveWidth' | 'heightLeft' | 'heightCenter' | 'heightRight'>): Pick<Obstacle, 'x' | 'y' | 'width' | 'height' | 'depth'> {
+export function defaultShape(type: string, wall: Pick<Wall, 'effectiveWidth' | 'heightLeft' | 'heightCenter' | 'heightRight'> & Partial<Pick<Wall, 'survey' | 'installGap'>>): Pick<Obstacle, 'x' | 'y' | 'width' | 'height' | 'depth'> {
   const H = wallHeightOf(wall);
-  const L = wall.effectiveWidth;
+  const L = wall.survey ? wall.survey.length : wall.effectiveWidth;
   switch (type) {
     case 'column': return { x: Math.max(0, Math.round(L / 2 - 200)), y: 0, width: 400, height: H, depth: 300 };
     case 'beam': return { x: 0, y: H - 300, width: L, height: 300, depth: 250 };
@@ -101,22 +103,24 @@ const sameCell = (a: Cell, b: Cell) => a.kind === b.kind && Math.abs(a.depth - b
 
 /** Alanı duvar şekline göre kutulara böler. */
 export function fitWall(
-  wall: Pick<Wall, 'effectiveWidth' | 'heightLeft' | 'heightCenter' | 'heightRight' | 'obstacles'>,
+  wall: Pick<Wall, 'effectiveWidth' | 'heightLeft' | 'heightCenter' | 'heightRight' | 'obstacles'> & Partial<Pick<Wall, 'survey' | 'installGap'>>,
   regionIn: FitRegion,
   optsIn: Partial<FitOptions> = {},
 ): FitResult {
   const o: FitOptions = { ...DEFAULT_FIT_OPTIONS, ...optsIn };
-  const L = wall.effectiveWidth;
-  const H = wallHeightOf(wall);
+  // Ayrıntılı ölçülü duvarda yan duvarların içeri girdiği yerler ve terazideki tabandan tavana kadar
+  const range = wallRange({ installGap: 0, ...wall }, regionIn.depth);
+  const L = range.x1;
+  const H = range.height;
   const warnings: string[] = [];
 
   // Alan duvarın içine kırpılır
-  const x0 = Math.max(0, regionIn.x);
+  const x0 = Math.max(range.x0, regionIn.x);
   const x1 = Math.min(L, regionIn.x + regionIn.width);
   const y0 = Math.max(0, regionIn.y);
   const y1 = Math.min(H, regionIn.y + regionIn.height);
   const region: FitRegion = { x: x0, y: y0, width: Math.max(0, x1 - x0), height: Math.max(0, y1 - y0), depth: regionIn.depth };
-  if (regionIn.x + regionIn.width > L + EPS || regionIn.y + regionIn.height > H + EPS || regionIn.x < -EPS || regionIn.y < -EPS) {
+  if (regionIn.x + regionIn.width > L + EPS || regionIn.y + regionIn.height > H + EPS || regionIn.x < range.x0 - EPS || regionIn.y < -EPS) {
     warnings.push('Dolap alanı duvarın dışına taşıyordu; duvar ölçüsüne kırpıldı.');
   }
   if (region.width < EPS || region.height < EPS || region.depth < EPS) return { region, boxes: [], blocked: [], warnings };

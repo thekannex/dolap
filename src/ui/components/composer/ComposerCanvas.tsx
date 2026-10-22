@@ -65,7 +65,7 @@ export default function ComposerCanvas({ boxes, computedById, selectedId, onSele
   const [drag, setDrag] = useState<Drag | null>(null);
 
   const bounds = compositionBounds(boxes);
-  const wallW = wall?.effectiveWidth ?? 0;
+  const wallW = wall ? (wall.survey?.length ?? wall.effectiveWidth) : 0;
   const wallH = wall ? wallHeightOf(wall) : 0;
   const wsW = Math.max(bounds.width + 1200, 3200, wallW + 600);
   const wsH = Math.max(bounds.height + 700, 2700, wallH + 300);

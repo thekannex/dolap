@@ -7,6 +7,7 @@ import { useProjectStore } from '../../../stores/project-store';
 import { useUIStore } from '../../../stores/ui-store';
 import type { Obstacle, Wall } from '../../../core/models/project';
 import { defaultShape, fitWall, wallHeightOf, DEFAULT_FIT_OPTIONS } from '../../../core/layout/wall-fit';
+import { wallRange } from '../../../core/layout/wall-survey';
 import type { FitRegion } from '../../../core/layout/wall-fit';
 import { CabinetModel, WallModel } from '../cabinet-3d/models';
 import { S } from '../cabinet-3d/scale';
@@ -34,14 +35,16 @@ export default function WallShape3D({ wall }: { wall: Wall }) {
   const createFitted = useProjectStore((s) => s.createFittedComposition);
   const setActivePage = useUIStore((s) => s.setActivePage);
 
-  const L = wall.effectiveWidth;
+  // Ayrıntılı ölçülü duvarda çizim gerçek boyda, dolap alanı yan duvarların izin verdiği aralıkta
+  const usable = wallRange(wall);
+  const L = wall.survey?.length ?? wall.effectiveWidth;
   const H = wallHeightOf(wall);
   const fitted = useMemo(() => project?.compositions.filter((c) => c.wallId === wall.id) ?? [], [project, wall.id]);
   const target = fitted[fitted.length - 1] ?? null;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tool, setTool] = useState<'select' | 'region'>('select');
-  const [region, setRegion] = useState<FitRegion>(() => target?.fit?.region ?? { x: 0, y: 0, width: L, height: H, depth: 600 });
+  const [region, setRegion] = useState<FitRegion>(() => target?.fit?.region ?? { x: usable.x0, y: 0, width: usable.x1 - usable.x0, height: H, depth: 600 });
   const [topHeight, setTopHeight] = useState(target?.fit?.topHeight ?? 0);
   const [maxModule, setMaxModule] = useState(target?.fit?.maxModule ?? DEFAULT_FIT_OPTIONS.maxModule);
   const [view, setView] = useState<'preview' | 'built'>(target ? 'built' : 'preview');
@@ -235,7 +238,7 @@ export default function WallShape3D({ wall }: { wall: Wall }) {
             <Button size="sm" variant={tool === 'region' ? 'primary' : 'secondary'} onClick={() => setTool(tool === 'region' ? 'select' : 'region')}>
               <PenTool size={13} /> Duvara çiz
             </Button>
-            <Button size="sm" onClick={() => { setRegion({ ...region, x: 0, y: 0, width: L, height: H }); setView('preview'); }} title="Duvarı boydan boya kapla">
+            <Button size="sm" onClick={() => { const u = wallRange(wall, region.depth); setRegion({ ...region, x: u.x0, y: 0, width: u.x1 - u.x0, height: H }); setView('preview'); }} title="Duvarı boydan boya kapla">
               <Maximize size={13} /> Boydan boya
             </Button>
           </div>

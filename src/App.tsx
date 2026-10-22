@@ -17,6 +17,7 @@ import Cabinet3DView from './ui/components/cabinet-3d/Cabinet3DView';
 import SettingsPage from './ui/components/settings/SettingsPage';
 import ComposerPage from './ui/components/composer/ComposerPage';
 import WallShapePage from './ui/components/wall-layout/WallShapePage';
+import WallSurveyPage from './ui/components/wall-survey/WallSurveyPage';
 import { Toasts, ConfirmDialog, ErrorBoundary } from './ui/components/shared/Overlays';
 import PageTour from './ui/components/tour/PageTour';
 import UpdateBanner from './ui/components/shared/UpdateBanner';
@@ -209,6 +210,7 @@ export default function App() {
           <ErrorBoundary key={`${page}-${job?.id ?? ""}`}>
             {page === 'projects' && <ProjectList />}
             {page === 'project' && <ProjectPage />}
+            {page === 'wall-survey' && <WallSurveyPage />}
             {page === 'wall-layout' && <WallLayoutPage />}
             {page === 'wall-shape' && <WallShapePage />}
             {page === 'composer' && <ComposerPage />}

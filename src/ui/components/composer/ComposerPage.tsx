@@ -13,6 +13,7 @@ import { formatNumber } from '../../../core/utils/format';
 import { Button, Card, EmptyState, NumInput, Section, TextInput, Toggle } from '../shared/ui';
 import { WarningItem } from '../cabinet-editor/DetailPanels';
 import ComposerCanvas from './ComposerCanvas';
+import WallChangeNotice from '../wall-survey/WallChangeNotice';
 import InteriorEditor from '../interior/InteriorEditor';
 import JointControls from '../shared/JointControls';
 import BehindDoorControl from '../shared/BehindDoorControl';
@@ -297,6 +298,7 @@ export default function ComposerPage() {
             <Button size="sm" variant="ghost" onClick={() => setActivePage('3d-preview')}><BoxIcon size={13} /> 3D'de gör</Button>
           </div>
         </div>
+        {wall && <WallChangeNotice wall={wall} />}
         <div data-tour="composer-canvas" className="flex-1 p-3 overflow-hidden">
           <ComposerCanvas
             wall={wall}

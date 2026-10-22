@@ -36,7 +36,7 @@ describe('tanıtım balonu konumu', () => {
 
 describe('tanıtımlar', () => {
   it('her ana sayfanın tanıtımı var ve adımlar dolu', () => {
-    for (const page of ['projects', 'project', 'wall-layout', 'wall-shape', 'composer', 'editor', 'cut-list', '3d-preview', 'settings'] as const) {
+    for (const page of ['projects', 'project', 'wall-survey', 'wall-layout', 'wall-shape', 'composer', 'editor', 'cut-list', '3d-preview', 'settings'] as const) {
       expect(TOURS[page]?.length ?? 0).toBeGreaterThan(2);
       for (const s of TOURS[page]!) {
         expect(s.title.length).toBeGreaterThan(0);
