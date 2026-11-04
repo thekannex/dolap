@@ -1,6 +1,7 @@
 import { RefreshCw, ExternalLink } from 'lucide-react';
 import { Button, Card } from '../shared/ui';
 import { updateApi, useUpdateState } from '../../hooks/use-update';
+import { DESKTOP_DOWNLOAD_URL, isWeb } from '../../../web/web-app';
 
 const TEXT: Record<string, string> = {
   idle: 'Henüz denetlenmedi.',
@@ -19,7 +20,15 @@ export default function UpdateCard() {
   return (
     <Card title="Güncellemeler" tour="settings-update">
       <div className="p-4 flex flex-col gap-3 text-sm">
-        {!api || !s || s.state === 'unsupported' ? (
+        {isWeb ? (
+          <>
+            <p>Tarayıcı sürümü: <b className="font-mono">{__APP_VERSION__}</b></p>
+            <p className="text-[var(--color-text-muted)]">Yeni sürüm yayımlandığında sayfa açılırken kendiliğinden yüklenir. İlk açılıştan sonra program internetsiz de çalışır.</p>
+            <a className="self-start inline-flex items-center gap-1.5 text-[var(--color-accent)] hover:underline" href={DESKTOP_DOWNLOAD_URL} target="_blank" rel="noreferrer">
+              <ExternalLink size={13} /> Windows masaüstü sürümünü indir
+            </a>
+          </>
+        ) : !api || !s || s.state === 'unsupported' ? (
           <p className="text-[var(--color-text-muted)]">
             Güncellemeler masaüstü (taşınabilir) sürümde GitHub üzerinden kendiliğinden denetlenir.
           </p>

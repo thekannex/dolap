@@ -13,6 +13,8 @@ import {
 import { createJobEntities, createProject, createWall, effectiveWallWidth, nextWallName, normalizeProject } from '../core/project/project-factory';
 import { nextJobName } from '../core/project/jobs';
 import { interiorFromCabinet } from '../core/engine/interior';
+import { kitchenMove, kitchenTypeForRect } from '../core/layout/kitchen-canvas';
+import type { CanvasRect } from '../core/layout/kitchen-canvas';
 import type { ProjectKind } from '../core/project/project-factory';
 
 type ProjectInfo = Pick<Project, 'name' | 'customerName' | 'customerPhone' | 'address' | 'notes'>;
@@ -73,6 +75,10 @@ export interface ProjectStore {
   duplicateCabinet: (id: string) => string | null;
   moveCabinet: (id: string, direction: -1 | 1) => void;
   applyWallPlan: (wallId: string, modules: PlannedModule[], opts: { includeUpper: boolean; replace: boolean }) => number;
+  /** Mutfak duvarında dolabı sürükleyerek taşır / boyutlandırır (konumu boş dolaplar bugünkü yerine sabitlenir). */
+  moveKitchenCabinet: (id: string, rect: CanvasRect) => void;
+  /** Mutfak duvarına çizilen alana dolap ekler; türü konumundan seçilir (üst, boy ya da alt dolap). */
+  addKitchenCabinetAt: (wallId: string, rect: CanvasRect) => string | null;
 
   addComposition: (name?: string) => string | null;
   renameComposition: (id: string, name: string) => void;
@@ -372,6 +378,40 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
       [cabinets[idx], cabinets[target]] = [cabinets[target], cabinets[idx]];
       return { ...p, cabinets };
     }),
+
+    moveKitchenCabinet: (id, rect) => mutate((p) => {
+      const cab = p.cabinets.find((c) => c.id === id);
+      if (!cab?.wallId) return p;
+      const onWall = p.cabinets.filter((c) => c.wallId === cab.wallId && !c.groupId);
+      const patches = kitchenMove(onWall, id, rect);
+      return {
+        ...p,
+        cabinets: p.cabinets.map((c) => {
+          const patch = patches.get(c.id);
+          if (!patch) return c;
+          const next = { ...c, ...patch };
+          // Otomatik ad ("Alt Dolap 600") yeni genişliği alır; elle verilen ad korunur
+          if (patch.width !== undefined && c.name === `${CABINET_TYPE_LABELS[c.type]} ${c.width}`) next.name = `${CABINET_TYPE_LABELS[c.type]} ${patch.width}`;
+          return next;
+        }),
+      };
+    }),
+
+    addKitchenCabinetAt: (wallId, rect) => {
+      const { project } = get();
+      if (!project) return null;
+      const type = kitchenTypeForRect(rect);
+      const id = uid();
+      const cabinet = createProjectCabinet({
+        id, type, width: Math.round(rect.w), code: nextCabinetCode(project.cabinets.map((c) => c.code)), wallId, x: Math.round(rect.x),
+        // Alt dolap tezgâh yüksekliğinde kalır; çizilen boy yalnız üst ve boy dolapta kullanılır
+        ...(type === 'base' ? {} : { height: Math.round(rect.h) }),
+      });
+      if (type === 'wall') cabinet.elevation = Math.round(rect.y);
+      cabinet.jobId = jobOfWall(project, wallId);
+      set({ project: { ...project, cabinets: [...project.cabinets, cabinet] }, activeCabinetId: id });
+      return id;
+    },
 
     applyWallPlan: (wallId, modules, opts) => {
       const { project } = get();

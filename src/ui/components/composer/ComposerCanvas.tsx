@@ -12,7 +12,7 @@ import type { ComputedCabinet } from '../../../core/engine/compute-cabinet';
 import { hasRails, jointsOf } from '../../../core/engine/compute-cabinet';
 import { boxesOverlap, compositionBounds, detectBoxContent, boxContentLabel } from '../../../core/layout/composition';
 import { formatNumber } from '../../../core/utils/format';
-import type { Wall } from '../../../core/models/project';
+import type { Obstacle, Wall } from '../../../core/models/project';
 import { WALL_SHAPE_TYPES, wallHeightOf } from '../../../core/layout/wall-fit';
 import { obstacleInfo } from '../wall-layout/obstacle-types';
 
@@ -27,12 +27,17 @@ type Drag =
   | { kind: 'empty-click'; start: { x: number; y: number } }
   | { kind: 'divider'; id: string; index: number; draft: CabinetInterior }
   | { kind: 'partition'; id: string; col: number; cell: number; draft: CabinetInterior }
-  | { kind: 'shelf'; id: string; col: number; cell: number; index: number; draft: CabinetInterior };
+  | { kind: 'shelf'; id: string; col: number; cell: number; index: number; draft: CabinetInterior }
+  | { kind: 'obs-move'; id: string; grab: { x: number; y: number }; orig: Rect; rect: Rect; moved: boolean }
+  | { kind: 'obs-resize'; id: string; handle: Handle; orig: Rect; rect: Rect };
 
 const GRID = 10;
 const MIN = 100;
 
 const rectOf = (c: ProjectCabinet): Rect => ({ x: c.x ?? 0, y: c.elevation ?? 0, w: c.width, h: c.height });
+const obsRect = (o: Obstacle): Rect => ({ x: o.x, y: o.y, w: o.width, h: o.height });
+const HANDLES: Handle[] = ['l', 'r', 't', 'b', 'tl', 'tr', 'bl', 'br'];
+const handleCursor = (h: Handle) => (h === 'l' || h === 'r' ? 'ew-resize' : h === 't' || h === 'b' ? 'ns-resize' : h === 'tl' || h === 'br' ? 'nwse-resize' : 'nesw-resize');
 const snapGrid = (v: number) => Math.round(v / GRID) * GRID;
 
 /** v'yi adaylardan tol içindeki en yakına yapıştırır; yoksa ızgaraya. */
@@ -46,7 +51,10 @@ function snap(v: number, candidates: number[], tol: number): number {
   return best;
 }
 
-export default function ComposerCanvas({ boxes, computedById, selectedId, onSelect, onCommit, onDraw, onDelete, onNudge, selectedCell, onSelectCell, onInteriorCommit, wall }: {
+export default function ComposerCanvas({
+  boxes, computedById, selectedId, onSelect, onCommit, onDraw, onDelete, onNudge, selectedCell, onSelectCell, onInteriorCommit, wall,
+  lockY, decorate, ghosts, onObstacleCommit, onObstacleDelete, allObstacles,
+}: {
   boxes: ProjectCabinet[];
   /** Duvara oturtulmuş dolapta duvar ve şekli arka planda çizilir. */
   wall?: Wall | null;
@@ -60,9 +68,21 @@ export default function ComposerCanvas({ boxes, computedById, selectedId, onSele
   selectedCell: CellRef | null;
   onSelectCell: (id: string, ref: CellRef | null) => void;
   onInteriorCommit: (id: string, interior: CabinetInterior) => void;
+  /** Taşınırken yerden yüksekliği değişmeyen kutular (mutfakta alt ve boy dolaplar). */
+  lockY?: (b: ProjectCabinet) => boolean;
+  /** Kutunun çevresine çizilen süsler (ayak, tezgâh); sürüklerken kutuyla birlikte gider. */
+  decorate?: (b: ProjectCabinet, r: Rect, SY: (y: number) => number, fs: number) => React.ReactNode;
+  /** Taşınamayan kopyalar (adedi 1'den çok dolap). */
+  ghosts?: Array<Rect & { key: string; label: string }>;
+  /** Verilirse duvardaki engeller sürüklenerek taşınır ve kenarlarından boyutlandırılır. */
+  onObstacleCommit?: (id: string, rect: { x: number; y: number; width: number; height: number }) => void;
+  onObstacleDelete?: (id: string) => void;
+  /** Priz, su girişi, cihaz boşluğu gibi bütün engelleri de çiz (mutfak). */
+  allObstacles?: boolean;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
+  const [selObs, setSelObs] = useState<string | null>(null);
 
   const bounds = compositionBounds(boxes);
   const wallW = wall ? (wall.survey?.length ?? wall.effectiveWidth) : 0;
@@ -98,6 +118,7 @@ export default function ComposerCanvas({ boxes, computedById, selectedId, onSele
 
   const onPointerDownEmpty = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
+    setSelObs(null);
     const p = toMm(e);
     const tol = tolerance();
     const start = { x: snap(p.x, xEdges, tol), y: Math.max(0, snap(p.y, yEdges, tol)) };
@@ -109,6 +130,7 @@ export default function ComposerCanvas({ boxes, computedById, selectedId, onSele
     if (e.button !== 0) return;
     e.stopPropagation();
     onSelect(b.id);
+    setSelObs(null);
     const p = toMm(e);
     try { (e.target as Element).setPointerCapture?.(e.pointerId); } catch { /* yakalanamayan işaretçi: sürükleme yine çalışır */ }
     setDrag({ kind: 'move', id: b.id, grab: { x: p.x - (b.x ?? 0), y: p.y - (b.elevation ?? 0) }, orig: rectOf(b), rect: rectOf(b), moved: false });
@@ -120,6 +142,29 @@ export default function ComposerCanvas({ boxes, computedById, selectedId, onSele
     try { (e.target as Element).setPointerCapture?.(e.pointerId); } catch { /* yakalanamayan işaretçi: sürükleme yine çalışır */ }
     setDrag({ kind: 'resize', id: b.id, handle, orig: rectOf(b), rect: rectOf(b) });
   };
+
+  const obstacles = wall?.obstacles ?? [];
+  const hs = fs * 0.55; // tutamaç boyutu
+  const onPointerDownObstacle = (e: React.PointerEvent, o: Obstacle) => {
+    if (e.button !== 0 || !onObstacleCommit) return;
+    e.stopPropagation();
+    onSelect(null);
+    setSelObs(o.id);
+    const p = toMm(e);
+    try { (e.target as Element).setPointerCapture?.(e.pointerId); } catch { /* yakalanamayan işaretçi: sürükleme yine çalışır */ }
+    setDrag({ kind: 'obs-move', id: o.id, grab: { x: p.x - o.x, y: p.y - o.y }, orig: obsRect(o), rect: obsRect(o), moved: false });
+  };
+  const onPointerDownObstacleHandle = (e: React.PointerEvent, o: Obstacle, handle: Handle) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    try { (e.target as Element).setPointerCapture?.(e.pointerId); } catch { /* yakalanamayan işaretçi: sürükleme yine çalışır */ }
+    setDrag({ kind: 'obs-resize', id: o.id, handle, orig: obsRect(o), rect: obsRect(o) });
+  };
+  // Engel taşınırken yapışılacak kenarlar: duvar, kutular ve diğer engeller
+  const obstacleEdges = (id: string) => ({
+    xs: [0, wallW, ...boxes.flatMap((b) => [b.x ?? 0, (b.x ?? 0) + b.width]), ...obstacles.filter((o) => o.id !== id).flatMap((o) => [o.x, o.x + o.width])],
+    ys: [0, wallH, ...boxes.flatMap((b) => [b.elevation ?? 0, (b.elevation ?? 0) + b.height]), ...obstacles.filter((o) => o.id !== id).flatMap((o) => [o.y, o.y + o.height])],
+  });
 
   const frameFor = (b: ProjectCabinet, r: Rect = rectOf(b)) =>
     interiorFrameOf({ ...b, width: r.w, height: r.h }, compositionComputeOptions(b, boxes));
@@ -166,6 +211,30 @@ export default function ComposerCanvas({ boxes, computedById, selectedId, onSele
       setDrag({ kind: 'draw', start, rect: { x: Math.min(start.x, cx), y: Math.min(start.y, cy), w: Math.abs(cx - start.x), h: Math.abs(cy - start.y) } });
       return;
     }
+    if (drag.kind === 'obs-move' || drag.kind === 'obs-resize') {
+      const { xs, ys } = obstacleEdges(drag.id);
+      const o = drag.orig;
+      if (drag.kind === 'obs-move') {
+        let x = p.x - drag.grab.x;
+        let y = p.y - drag.grab.y;
+        const sxL = snap(x, xs, tol); const sxR = snap(x + o.w, xs, tol) - o.w;
+        x = Math.max(0, Math.abs(sxL - x) <= Math.abs(sxR - x) ? sxL : sxR);
+        const syB = snap(y, ys, tol); const syT = snap(y + o.h, ys, tol) - o.h;
+        y = Math.max(0, Math.abs(syB - y) <= Math.abs(syT - y) ? syB : syT);
+        const moved = drag.moved || Math.abs(x - o.x) >= GRID || Math.abs(y - o.y) >= GRID;
+        setDrag({ ...drag, rect: { ...o, x, y }, moved });
+      } else {
+        let { x, y, w, h } = o;
+        const right = o.x + o.w;
+        const top = o.y + o.h;
+        if (drag.handle.includes('l')) { const nx = Math.max(0, Math.min(snap(p.x, xs, tol), right - GRID)); w = right - nx; x = nx; }
+        if (drag.handle.includes('r')) { const nr = Math.max(snap(p.x, xs, tol), o.x + GRID); w = nr - o.x; }
+        if (drag.handle.includes('b')) { const ny = Math.max(0, Math.min(snap(p.y, ys, tol), top - GRID)); h = top - ny; y = ny; }
+        if (drag.handle.includes('t')) { const nt = Math.max(snap(p.y, ys, tol), o.y + GRID); h = nt - o.y; }
+        setDrag({ ...drag, rect: { x, y, w, h } });
+      }
+      return;
+    }
     const { xs, ys } = otherEdges(drag.id);
     if (drag.kind === 'move') {
       const o = drag.orig;
@@ -176,6 +245,8 @@ export default function ComposerCanvas({ boxes, computedById, selectedId, onSele
       x = Math.abs(sxL - x) <= Math.abs(sxR - x) ? sxL : sxR;
       const syB = snap(y, ys, tol); const syT = snap(y + o.h, ys, tol) - o.h;
       y = Math.max(0, Math.abs(syB - y) <= Math.abs(syT - y) ? syB : syT);
+      const box = boxes.find((b) => b.id === drag.id);
+      if (box && lockY?.(box)) y = o.y;
       const moved = drag.moved || Math.abs(x - o.x) >= GRID || Math.abs(y - o.y) >= GRID;
       setDrag({ ...drag, rect: { ...o, x, y }, moved });
       return;
@@ -203,11 +274,24 @@ export default function ComposerCanvas({ boxes, computedById, selectedId, onSele
       onCommit(drag.id, drag.rect);
     } else if (drag.kind === 'divider' || drag.kind === 'partition' || drag.kind === 'shelf') {
       onInteriorCommit(drag.id, drag.draft);
+    } else if ((drag.kind === 'obs-move' && drag.moved) || drag.kind === 'obs-resize') {
+      const r = drag.rect;
+      onObstacleCommit?.(drag.id, { x: r.x, y: r.y, width: r.w, height: r.h });
     }
     setDrag(null);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    const so = selObs ? obstacles.find((o) => o.id === selObs) : null;
+    if (so && onObstacleCommit) {
+      if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); onObstacleDelete?.(so.id); setSelObs(null); return; }
+      const st = e.shiftKey ? 50 : GRID;
+      const mv: Record<string, [number, number]> = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, st], ArrowDown: [0, -st] };
+      const m = mv[e.key];
+      if (m) { e.preventDefault(); onObstacleCommit(so.id, { x: Math.max(0, so.x + m[0]), y: Math.max(0, so.y + m[1]), width: so.width, height: so.height }); }
+      if (e.key === 'Escape') setSelObs(null);
+      return;
+    }
     if (!selectedId) return;
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); onDelete(selectedId); return; }
     const step = e.shiftKey ? 50 : GRID;
@@ -225,8 +309,6 @@ export default function ComposerCanvas({ boxes, computedById, selectedId, onSele
     }
     return ids;
   }, [boxes]);
-
-  const hs = fs * 0.55; // tutamaç boyutu
 
   return (
     <div className="relative w-full h-full">
@@ -253,21 +335,30 @@ export default function ComposerCanvas({ boxes, computedById, selectedId, onSele
 
       {/* Duvar ve şekli (kolon, kiriş, çıkıntı, pencere…) */}
       {wall && (
-        <g pointerEvents="none">
-          <rect x={0} y={SY(wallH)} width={wallW} height={wallH} fill="#f5f5f4" fillOpacity={0.6} stroke="#a8a29e" strokeWidth={fs * 0.12} strokeDasharray={`${fs * 0.6},${fs * 0.3}`} />
+        <g pointerEvents={onObstacleCommit ? undefined : 'none'}>
+          <rect x={0} y={SY(wallH)} width={wallW} height={wallH} fill="#f5f5f4" fillOpacity={0.6} stroke="#a8a29e" strokeWidth={fs * 0.12} strokeDasharray={`${fs * 0.6},${fs * 0.3}`} pointerEvents="none" />
           <text x={wallW} y={SY(wallH) - fs * 0.5} textAnchor="end" fontSize={fs * 0.75} fill="#78716c">{wall.name} · {formatNumber(wallW)} × {formatNumber(wallH)}</text>
-          {wall.obstacles.map((o) => {
-            const shape = WALL_SHAPE_TYPES.has(o.type);
-            const opening = o.type === 'window' || o.type === 'door';
-            if (!shape && !opening && o.type !== 'pipe') return null;
+          {obstacles.map((ob) => {
+            const shape = WALL_SHAPE_TYPES.has(ob.type);
+            const opening = ob.type === 'window' || ob.type === 'door';
+            if (!shape && !opening && ob.type !== 'pipe' && !allObstacles) return null;
+            const od = drag && (drag.kind === 'obs-move' || drag.kind === 'obs-resize') && drag.id === ob.id ? drag.rect : null;
+            const o = od ? { ...ob, x: od.x, y: od.y, width: od.w, height: od.h } : ob;
+            const mark = !shape && !opening && o.type !== 'pipe';
+            const color = mark ? (o.type === 'appliance' ? '#2563eb' : '#dc2626') : opening ? '#0284c7' : '#78716c';
+            const sel = selObs === o.id && !!onObstacleCommit;
             return (
               <g key={o.id}>
                 <rect x={o.x} y={SY(o.y + o.height)} width={o.width} height={o.height}
-                  fill={opening ? '#bae6fd' : o.type === 'recess' ? 'none' : '#d6d3d1'} fillOpacity={opening ? 0.35 : 0.75}
-                  stroke={opening ? '#0284c7' : '#78716c'} strokeWidth={fs * 0.1} strokeDasharray={o.type === 'recess' ? `${fs * 0.5},${fs * 0.3}` : undefined} />
-                {o.width > fs * 3 && o.height > fs * 2 && (
-                  <text x={o.x + o.width / 2} y={SY(o.y + o.height) + fs * 1.3} textAnchor="middle" fontSize={fs * 0.7} fill="#57534e">
-                    {obstacleInfo(o.type).label}{o.depth > 0 && !opening ? ` ${o.depth}` : ''}
+                  fill={mark ? color : opening ? '#bae6fd' : o.type === 'recess' ? '#ffffff' : '#d6d3d1'}
+                  fillOpacity={mark ? 0.1 : opening ? 0.35 : o.type === 'recess' ? 0.01 : 0.75}
+                  stroke={sel ? '#ea580c' : color} strokeWidth={sel ? fs * 0.18 : fs * 0.1}
+                  strokeDasharray={o.type === 'recess' || mark ? `${fs * 0.5},${fs * 0.3}` : undefined}
+                  className={onObstacleCommit ? 'cursor-move' : undefined} onPointerDown={(e) => onPointerDownObstacle(e, ob)} />
+                {o.width > fs * 3 && o.height > fs * 1.2 && (
+                  <text x={o.x + o.width / 2} y={mark ? SY(o.y + o.height / 2) : SY(o.y + o.height) + fs * 1.3} textAnchor="middle"
+                    dominantBaseline={mark ? 'middle' : undefined} fontSize={fs * 0.7} fill={mark ? color : '#57534e'} pointerEvents="none">
+                    {obstacleInfo(o.type).label}{o.depth > 0 && !opening && !mark ? ` ${o.depth}` : ''}
                   </text>
                 )}
               </g>
@@ -307,6 +398,7 @@ export default function ComposerCanvas({ boxes, computedById, selectedId, onSele
         const label = Math.min(fs * 1.1, r.w / 7, r.h / 3.2);
         return (
           <g key={b.id} opacity={draft ? 0.85 : 1}>
+            {decorate?.(b, r, SY, fs)}
             {legs > 0 && [X + Math.min(60, r.w * 0.08), X + r.w - Math.min(60, r.w * 0.08) - 30].map((lx, i) => (
               <path key={i} d={`M ${lx} ${bottom} h 30 l -8 ${legs} h -14 z`} fill="#d4af37" stroke="#a16207" strokeWidth={fs * 0.05} pointerEvents="none" />
             ))}
@@ -344,10 +436,10 @@ export default function ComposerCanvas({ boxes, computedById, selectedId, onSele
               {lockedLabel} · {formatNumber(r.w)}×{formatNumber(r.h)}
             </text>
 
-            {sel && !drag && (['l', 'r', 't', 'b', 'tl', 'tr', 'bl', 'br'] as Handle[]).map((h) => {
+            {sel && !drag && HANDLES.filter((h) => !(h.includes('b') && lockY?.(b))).map((h) => {
               const hx = h.includes('l') ? X : h.includes('r') ? X + r.w : X + r.w / 2;
               const hy = h.includes('t') ? top : h.includes('b') ? bottom : top + r.h / 2;
-              const cursor = h === 'l' || h === 'r' ? 'ew-resize' : h === 't' || h === 'b' ? 'ns-resize' : h === 'tl' || h === 'br' ? 'nwse-resize' : 'nesw-resize';
+              const cursor = handleCursor(h);
               return (
                 <rect key={h} x={hx - hs / 2} y={hy - hs / 2} width={hs} height={hs} fill="#fff" stroke="#ea580c" strokeWidth={fs * 0.1}
                   style={{ cursor }} onPointerDown={(e) => onPointerDownHandle(e, b, h)} />
@@ -369,6 +461,42 @@ export default function ComposerCanvas({ boxes, computedById, selectedId, onSele
           </g>
         );
       })}
+
+      {/* Engellerin dolapların üstündeki kenarları: dolabın arkasında kalan engel de kenarından tutulur */}
+      {onObstacleCommit && obstacles.map((ob) => {
+        if (!WALL_SHAPE_TYPES.has(ob.type) && ob.type !== 'window' && ob.type !== 'door' && ob.type !== 'pipe' && !allObstacles) return null;
+        const od = drag && (drag.kind === 'obs-move' || drag.kind === 'obs-resize') && drag.id === ob.id ? drag.rect : null;
+        const o = od ? { ...ob, x: od.x, y: od.y, width: od.w, height: od.h } : ob;
+        const sel = selObs === o.id;
+        return (
+          <g key={`kenar-${o.id}`}>
+            {(sel || od) && (
+              <rect x={o.x} y={SY(o.y + o.height)} width={o.width} height={o.height} fill="none" stroke="#ea580c" strokeWidth={fs * 0.14}
+                strokeDasharray={`${fs * 0.5},${fs * 0.3}`} pointerEvents="none" />
+            )}
+            <rect x={o.x} y={SY(o.y + o.height)} width={o.width} height={o.height} fill="none" stroke="transparent" strokeWidth={(fs * 3.2 * 100) / Math.max(1, zp.zoom)}
+              pointerEvents="stroke" className="cursor-move" onPointerDown={(e) => onPointerDownObstacle(e, ob)} />
+            {od && (
+              <text x={o.x + o.width / 2} y={SY(o.y + o.height) - fs * 0.5} textAnchor="middle" fontSize={fs * 0.85} fill="#ea580c" fontFamily="var(--font-mono)" pointerEvents="none">
+                {formatNumber(o.width)} × {formatNumber(o.height)} · soldan {formatNumber(o.x)} · yerden {formatNumber(o.y)}
+              </text>
+            )}
+            {sel && !drag && HANDLES.map((h) => {
+              const hx = h.includes('l') ? o.x : h.includes('r') ? o.x + o.width : o.x + o.width / 2;
+              const hy = h.includes('t') ? SY(o.y + o.height) : h.includes('b') ? SY(o.y) : SY(o.y + o.height / 2);
+              return <rect key={h} x={hx - hs / 2} y={hy - hs / 2} width={hs} height={hs} fill="#fff" stroke="#ea580c" strokeWidth={fs * 0.1}
+                style={{ cursor: handleCursor(h) }} onPointerDown={(e) => onPointerDownObstacleHandle(e, ob, h)} />;
+            })}
+          </g>
+        );
+      })}
+
+      {ghosts?.map((g) => (
+        <g key={g.key} pointerEvents="none">
+          <rect x={g.x} y={SY(g.y + g.h)} width={g.w} height={g.h} fill="#fdf8f1" fillOpacity={0.6} stroke="#a8916f" strokeWidth={fs * 0.08} strokeDasharray={`${fs * 0.4},${fs * 0.3}`} />
+          <text x={g.x + g.w / 2} y={SY(g.y + g.h / 2)} textAnchor="middle" dominantBaseline="middle" fontSize={Math.min(fs, g.w / 6)} fill="#a1a1aa">{g.label}</text>
+        </g>
+      ))}
 
       {drag?.kind === 'draw' && (
         <g pointerEvents="none">

@@ -1,0 +1,16 @@
+# Dolap tarayıcı sürümü (Apache / LiteSpeed)
+AddType application/manifest+json .webmanifest
+AddType font/ttf .ttf
+
+<IfModule mod_headers.c>
+  # Sayfa, service worker ve bildirim her açılışta denetlensin: yeni sürüm hemen gelir
+  <FilesMatch "^(index\.html|sw\.js|manifest\.webmanifest)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  # Derlenen dosyaların adında içerik özeti var; uzun süre önbellekte kalabilir
+  <FilesMatch "-[A-Za-z0-9_-]{8}\.(js|css|ttf|png|svg)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>
+
+Options -Indexes

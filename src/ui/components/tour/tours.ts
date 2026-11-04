@@ -39,7 +39,8 @@ export const TOURS: Partial<Record<PageId, TourStep[]>> = {
     { target: 'wall-measure', title: 'Duvar ölçüsü', text: 'Duvarın boyu ve dolabın sığdığı alan. Ölçüyü değiştirmek ya da düzensiz duvarı (açılı köşe, basık tavan, eğimli zemin) girmek için 1. adıma dönün.' },
     { target: 'wall-plan', title: 'Otomatik yerleşim', text: 'Kullanmak istediğiniz dolap genişliklerini seçin; program duvarı en uygun şekilde böler. "Öneriyi uygula" alt ve üst dolapları kurar.' },
     { target: 'wall-obstacles', title: 'Engeller ve cihazlar', text: 'Pencere, kapı, priz, su girişi, bulaşık makinesi boşluğu gibi engelleri ölçüleriyle ekleyin. Cihaz boşlukları yerleşimde boş bırakılır.' },
-    { target: 'wall-view', title: 'Önden görünüş', text: 'Duvar, engeller ve dolaplar ölçekli çizilir. Bir dolaba tıklayınca o dolabın ayrıntılı düzenlemesine geçilir.' },
+    { target: 'wall-view', title: 'Önden görünüş', text: 'Duvar, engeller ve dolaplar ölçekli çizilir. Dolabı ya da engeli sürükleyerek taşıyın, seçince çıkan tutamaçlarla boyutlandırın. Boş alana sürükleyerek yeni dolap çizin: yüksekte üst, uzunsa boy, değilse alt dolap olur. Raf ve bölmeler de çizimde sürüklenir.' },
+    { target: 'wall-box-panel', title: 'Seçili dolap', text: 'Seçtiğiniz dolabın rafları, kapakları ve bölmeleri; ölçüsü, konumu, dikmeleri. Duvar dolabı ve bağımsız ünitedeki kutu paneliyle aynı araçlardır.' },
     { target: 'nav-steps', title: 'Sonraki adım', text: 'Dolapları tek tek ayarlamak (kapak, raf, çekmece, evye) için 2. adım "Dolaplar"a geçin.' },
   ],
   'wall-shape': [

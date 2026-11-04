@@ -26,7 +26,7 @@ export default function ObstacleEditor({ wall }: { wall: Wall }) {
       </summary>
       <div className="px-3 pb-3 flex flex-col gap-2">
         <p className="text-[11px] text-[var(--color-text-dim)]">
-          Kolon, kiriş, çıkıntı ve girinti duvarın şeklidir; "Derinlik" duvardan odaya ne kadar taştığıdır (girintide duvarın içine). "Duvar şekli (3D)" sekmesinde sürükleyerek de yerleştirilir. "Cihaz boşluğu" otomatik yerleşimde boş bırakılır. Ölçüler duvarın sol alt köşesinden mm.
+          Kolon, kiriş, çıkıntı ve girinti duvarın şeklidir; "Derinlik" duvardan odaya ne kadar taştığıdır (girintide duvarın içine). Hepsi sağdaki çizimde sürüklenerek taşınır, kenarlarından boyutlandırılır. "Cihaz boşluğu" otomatik yerleşimde boş bırakılır. Ölçüler duvarın sol alt köşesinden mm.
         </p>
         <div className="flex flex-wrap gap-1">
           {OBSTACLE_TYPES.map(({ value, label, icon: Icon }) => (

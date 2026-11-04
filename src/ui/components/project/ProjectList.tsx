@@ -10,6 +10,7 @@ import { JOB_ICONS, firstStep } from '../../navigation';
 import { formatDateTime, safeFileName } from '../../../core/utils/format';
 import { useProjectStore } from '../../../stores/project-store';
 import { useUIStore } from '../../../stores/ui-store';
+import { isWeb } from '../../../web/web-app';
 import { openWithoutSaving, saveNow } from '../../../stores/autosave';
 import { pickTextFile, saveText } from '../../lib/files';
 import { Button, Card, TextInput } from '../shared/ui';
@@ -146,7 +147,9 @@ export default function ProjectList() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold text-[var(--color-text)]">Projeler</h1>
-            <p className="text-sm text-[var(--color-text-muted)]">Projeler bu bilgisayarda otomatik kaydedilir.</p>
+            <p className="text-sm text-[var(--color-text-muted)]">{isWeb
+              ? 'Projeler bu tarayıcıda otomatik kaydedilir. Tarayıcı verilerini silerseniz projeler de silinir; önemli projelerin yedeğini alın.'
+              : 'Projeler bu bilgisayarda otomatik kaydedilir.'}</p>
           </div>
           <div className="flex gap-2">
             <Button data-tour="projects-import" onClick={handleImport}><Upload size={15} /> Yedekten aç</Button>

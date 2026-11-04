@@ -1,190 +1,213 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Pencil, Trash2, MousePointerClick } from 'lucide-react';
 import type { Wall } from '../../../core/models/project';
+import type { ProjectCabinet } from '../../../core/models/cabinet';
+import type { ComputedCabinet } from '../../../core/engine/compute-cabinet';
 import { placeWallCabinets, checkWallFit } from '../../../core/layout/wall-elevation';
-import type { WallPlacement } from '../../../core/layout/wall-elevation';
+import { kitchenCanvas, kitchenYLocked } from '../../../core/layout/kitchen-canvas';
+import type { CanvasRect } from '../../../core/layout/kitchen-canvas';
+import { boxesOverlap } from '../../../core/layout/composition';
+import { wallHeightOf } from '../../../core/layout/wall-fit';
+import { CABINET_TYPE_LABELS } from '../../../core/engine/cabinet-factory';
+import { interiorFromCabinet } from '../../../core/engine/interior';
 import { useProjectStore } from '../../../stores/project-store';
 import { useUIStore } from '../../../stores/ui-store';
 import { useProjectComputation } from '../../hooks/use-cabinet-calculations';
-import { obstacleInfo } from './obstacle-types';
+import ComposerCanvas from '../composer/ComposerCanvas';
+import InteriorEditor from '../interior/InteriorEditor';
+import type { CellRef } from '../interior/InteriorSvg';
+import BehindDoorControl from '../shared/BehindDoorControl';
+import JointControls from '../shared/JointControls';
+import { Button, NumInput, Section } from '../shared/ui';
+import { ON_LEGS, WITH_COUNTERTOP, COUNTERTOP_THICKNESS as COUNTERTOP } from '../../../core/layout/scene-layout';
 
-import { ON_LEGS, WITH_COUNTERTOP, UPPER_BOTTOM, KITCHEN_LEG_HEIGHT as PLINTH, COUNTERTOP_THICKNESS as COUNTERTOP } from '../../../core/layout/scene-layout';
+/** Seçili mutfak dolabı: raf, kapak, bölme; ölçü ve konum; dikmeler. Duvar dolabının kutu paneliyle aynı araçlar. */
+function KitchenBoxPanel({ cab, box, onMove, selectedCell, onSelectCell }: {
+  cab: ProjectCabinet; box: ProjectCabinet; onMove: (rect: CanvasRect) => void;
+  selectedCell: CellRef | null; onSelectCell: (ref: CellRef | null) => void;
+}) {
+  const updateCabinet = useProjectStore((s) => s.updateCabinet);
+  const removeCabinet = useProjectStore((s) => s.removeCabinet);
+  const setActivePage = useUIStore((s) => s.setActivePage);
+  const confirm = useUIStore((s) => s.confirm);
+  const rect = { x: box.x ?? 0, y: box.elevation ?? 0, w: box.width, h: box.height };
+  return (
+    <div className="flex flex-col">
+      <div className="flex items-center justify-between pb-2 border-b border-[var(--color-border)]">
+        <div className="min-w-0">
+          <p className="font-mono text-sm font-semibold">{cab.code}</p>
+          <p className="text-xs text-[var(--color-text-muted)] truncate">{cab.name} · {CABINET_TYPE_LABELS[cab.type]}</p>
+        </div>
+        <Button size="sm" variant="danger" aria-label="Dolabı sil" title="Dolabı sil" onClick={async () => {
+          if (await confirm({ title: 'Dolap silinsin mi?', message: `${cab.code} duvardan kaldırılacak.`, confirmLabel: 'Sil', danger: true })) removeCabinet(cab.id);
+        }}><Trash2 size={14} /></Button>
+      </div>
 
+      {cab.type !== 'filler' && (
+        <Section title="Raflar, kapaklar ve bölmeler">
+          {/* Bölmesiz dolap da bölmeli gösterilir; ilk değişiklikte bölmeli kaydedilir */}
+          <InteriorEditor cabinet={cab.interior ? cab : { ...cab, interior: interiorFromCabinet(cab) }} selected={selectedCell} onSelect={onSelectCell} />
+        </Section>
+      )}
+
+      <Section title="Ölçü ve konum">
+        <div className="grid grid-cols-3 gap-2">
+          <NumInput label="Genişlik" value={cab.width} onChange={(v) => onMove({ ...rect, w: v })} min={50} max={3000} />
+          <NumInput label="Yükseklik" value={cab.height} onChange={(v) => onMove({ ...rect, h: v })} min={100} max={2800} />
+          <NumInput label="Derinlik" value={cab.depth} onChange={(v) => updateCabinet(cab.id, { depth: v })} min={100} max={1200} />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <NumInput label="Soldan" value={rect.x} onChange={(v) => onMove({ ...rect, x: v })} max={20000} />
+          {kitchenYLocked(cab)
+            ? <p className="text-[11px] text-[var(--color-text-dim)] self-end pb-1.5">Yerden {rect.y} mm (ayak / zemin)</p>
+            : <NumInput label="Yerden" value={rect.y} onChange={(v) => onMove({ ...rect, y: v })} max={3000} />}
+        </div>
+      </Section>
+
+      <Section title="Dikmeler ve tablalar">
+        <BehindDoorControl cabinet={cab} onChange={(patch) => updateCabinet(cab.id, patch)} />
+        <JointControls cabinet={cab} onChange={(patch) => updateCabinet(cab.id, patch)} />
+      </Section>
+
+      <Button size="sm" variant="ghost" className="mt-3" onClick={() => setActivePage('editor')}><Pencil size={13} /> Dolap editöründe ayrıntılar (çekmece, evye…)</Button>
+    </div>
+  );
+}
+
+/**
+ * Mutfak duvarının önden görünüşü. Duvar dolabı ve bağımsız ünitedeki çizim alanının aynısı:
+ * dolaplar ve engeller sürüklenerek taşınır, kenarlarından boyutlandırılır; raf ve bölmeler
+ * çizimde sürüklenir; boş alana çizilen kutu yeni dolap olur.
+ */
 export default function WallLayoutView({ wall }: { wall: Wall }) {
   const allCabinets = useProjectStore((s) => s.project?.cabinets);
+  const activeCabinetId = useProjectStore((s) => s.activeCabinetId);
   const setActiveCabinet = useProjectStore((s) => s.setActiveCabinet);
-  const setActivePage = useUIStore((s) => s.setActivePage);
+  const updateCabinet = useProjectStore((s) => s.updateCabinet);
+  const removeCabinet = useProjectStore((s) => s.removeCabinet);
+  const moveKitchenCabinet = useProjectStore((s) => s.moveKitchenCabinet);
+  const addKitchenCabinetAt = useProjectStore((s) => s.addKitchenCabinetAt);
+  const updateObstacle = useProjectStore((s) => s.updateObstacle);
+  const removeObstacle = useProjectStore((s) => s.removeObstacle);
+  const notify = useUIStore((s) => s.notify);
+  const confirm = useUIStore((s) => s.confirm);
   const computation = useProjectComputation();
-  const [hover, setHover] = useState<string | null>(null);
+  const [cellSel, setCellSel] = useState<{ boxId: string; ref: CellRef } | null>(null);
 
-  const cabinets = useMemo(() => (allCabinets ?? []).filter((c) => c.wallId === wall.id), [allCabinets, wall.id]);
+  const cabinets = useMemo(() => (allCabinets ?? []).filter((c) => c.wallId === wall.id && !c.groupId), [allCabinets, wall.id]);
   const placements = useMemo(() => placeWallCabinets(cabinets), [cabinets]);
   const fit = useMemo(() => checkWallFit(placements, wall.effectiveWidth), [placements, wall.effectiveWidth]);
+  const wallH = wallHeightOf(wall);
+  const { boxes, ghosts } = useMemo(() => kitchenCanvas(cabinets, wallH), [cabinets, wallH]);
+  const computedById = useMemo(
+    () => new Map<string, ComputedCabinet>(computation?.cabinets.map((c) => [c.cabinet.id, c.computed]) ?? []),
+    [computation],
+  );
   // Su girişi, en yakın evye çanağının ekseninden ne kadar uzakta
   const waterGap = useMemo(() => {
     const water = wall.obstacles.find((o) => o.type === 'water_inlet') ?? wall.obstacles.find((o) => o.type === 'drain');
-    if (!water || !computation) return null;
+    if (!water) return null;
     const centers = placements.flatMap((p) => {
-      const sink = computation.cabinets.find((c) => c.cabinet.id === p.cabinetId)?.computed.sink;
+      const sink = computedById.get(p.cabinetId)?.sink;
       return sink ? [p.x + sink.bowls[0].x + sink.bowls[0].w / 2] : [];
     });
     if (centers.length === 0) return null;
     const w = water.x + water.width / 2;
     return Math.round(Math.min(...centers.map((c) => Math.abs(c - w))));
-  }, [wall.obstacles, computation, placements]);
-  const cabinetById = useMemo(() => new Map(cabinets.map((c) => [c.id, c])), [cabinets]);
-  const computedById = useMemo(() => new Map(computation?.cabinets.map((c) => [c.cabinet.id, c.computed]) ?? []), [computation]);
+  }, [wall.obstacles, computedById, placements]);
 
-  const W = Math.max(wall.effectiveWidth, ...placements.map((p) => p.x + p.width));
-  const wallH = Math.max(wall.heightLeft, wall.heightCenter, wall.heightRight, 2000);
-  const pad = 120;
-  const svgW = W + pad * 2;
-  const svgH = wallH + pad * 2;
-  const floorY = pad + wallH;
+  const selectedBox = boxes.find((b) => b.id === activeCabinetId) ?? null;
+  const selectedCab = selectedBox ? cabinets.find((c) => c.id === selectedBox.id) ?? null : null;
+  const selectedCell = selectedBox && cellSel?.boxId === selectedBox.id ? cellSel.ref : null;
 
-  const rectFor = (p: WallPlacement) => {
-    if (p.row === 'wall') {
-      const top = Math.max(pad, floorY - UPPER_BOTTOM - p.height);
-      return { x: pad + p.x, y: top, w: p.width, h: p.height };
-    }
-    const lift = ON_LEGS.has(p.type) ? PLINTH : 0;
-    return { x: pad + p.x, y: floorY - lift - p.height, w: p.width, h: p.height };
-  };
-
-  const openEditor = (id: string) => {
-    setActiveCabinet(id);
-    setActivePage('editor');
+  const rects = [...boxes.map((b) => ({ id: b.id, r: { x: b.x ?? 0, y: b.elevation ?? 0, w: b.width, h: b.height } })), ...ghosts.map((g) => ({ id: g.cabinetId, r: g }))];
+  const overlapsOthers = (id: string | null, r: CanvasRect) => rects.some((o) => o.id !== id && boxesOverlap(r, o.r));
+  const move = (id: string, r: CanvasRect) => {
+    if (overlapsOthers(id, r)) { notify('error', 'Dolaplar üst üste binemez; eski yerine döndü.'); return; }
+    moveKitchenCabinet(id, r);
   };
 
   return (
-    <div data-tour="wall-view" className="flex-1 flex flex-col overflow-hidden bg-[var(--color-bg)]">
-      <div className="flex items-center gap-4 px-4 py-2 border-b border-[var(--color-border)] bg-[var(--color-bg-card)] text-xs text-[var(--color-text-muted)]">
-        <span className="font-semibold text-[var(--color-text)]">{wall.name}</span>
-        <span>Kullanılabilir: <b className="font-mono">{wall.effectiveWidth}</b> mm</span>
-        <span>Dolap: <b className="font-mono">{cabinets.length}</b></span>
-        {fit.overflow > 0 && (
-          <span className="flex items-center gap-1 text-[var(--color-error)]"><AlertTriangle size={13} /> Duvarı {fit.overflow} mm aşıyor</span>
-        )}
-        {waterGap !== null && waterGap > 100 && (
-          <span className="flex items-center gap-1 text-[var(--color-warning)]"><AlertTriangle size={13} /> Evye su girişinden {waterGap} mm uzakta</span>
-        )}
-        {fit.overlaps.length > 0 && (
-          <span className="flex items-center gap-1 text-[var(--color-warning)]"><AlertTriangle size={13} /> Çakışan: {fit.overlaps.map((o) => o.join('↔')).join(', ')}</span>
-        )}
-        <span className="ml-auto text-[var(--color-text-dim)]">Bir dolaba tıklayarak düzenleyin</span>
+    <div className="flex-1 flex overflow-hidden">
+      <div data-tour="wall-view" className="flex-1 min-w-0 flex flex-col overflow-hidden bg-[var(--color-bg)]">
+        <div className="flex items-center gap-4 px-4 py-2 border-b border-[var(--color-border)] bg-[var(--color-bg-card)] text-xs text-[var(--color-text-muted)]">
+          <span className="font-semibold text-[var(--color-text)]">{wall.name}</span>
+          <span>Kullanılabilir: <b className="font-mono">{wall.effectiveWidth}</b> mm</span>
+          <span>Dolap: <b className="font-mono">{cabinets.length}</b></span>
+          {fit.overflow > 0 && (
+            <span className="flex items-center gap-1 text-[var(--color-error)]"><AlertTriangle size={13} /> Duvarı {fit.overflow} mm aşıyor</span>
+          )}
+          {waterGap !== null && waterGap > 100 && (
+            <span className="flex items-center gap-1 text-[var(--color-warning)]"><AlertTriangle size={13} /> Evye su girişinden {waterGap} mm uzakta</span>
+          )}
+          {fit.overlaps.length > 0 && (
+            <span className="flex items-center gap-1 text-[var(--color-warning)]"><AlertTriangle size={13} /> Çakışan: {fit.overlaps.map((o) => o.join('↔')).join(', ')}</span>
+          )}
+          <span className="ml-auto text-[var(--color-text-dim)]">Dolabı ya da engeli sürükleyin · kenarından boyutlandırın · boş alana çizin</span>
+        </div>
+        <div className="flex-1 p-3 overflow-hidden relative">
+          {cabinets.length === 0 && (
+            <div className="absolute z-10 top-6 left-1/2 -translate-x-1/2 text-center text-sm text-[var(--color-text-muted)] bg-[var(--color-bg-card)]/90 border border-[var(--color-border)] rounded-lg px-4 py-3 shadow-sm pointer-events-none">
+              Bu duvarda dolap yok. Soldaki <b>Otomatik yerleşim</b> panelinden öneriyi uygulayın ya da duvarın önüne sürükleyerek dolap çizin.
+            </div>
+          )}
+          <ComposerCanvas
+            wall={wall}
+            allObstacles
+            boxes={boxes}
+            ghosts={ghosts.map((g, i) => ({ ...g, key: `${g.cabinetId}-${i}`, label: g.code }))}
+            computedById={computedById}
+            selectedId={selectedBox?.id ?? null}
+            onSelect={(id) => setActiveCabinet(id)}
+            selectedCell={selectedCell}
+            onSelectCell={(id, ref) => setCellSel(ref ? { boxId: id, ref } : null)}
+            onInteriorCommit={(id, interior) => updateCabinet(id, { interior })}
+            lockY={kitchenYLocked}
+            decorate={(b, r, SY, fs) => (
+              <g pointerEvents="none">
+                {b.row !== 'wall' && ON_LEGS.has(b.type) && r.y > 0 && (
+                  <rect x={r.x + 10} y={SY(r.y)} width={Math.max(0, r.w - 20)} height={r.y} fill="#a1a1aa" opacity={0.3} />
+                )}
+                {b.row !== 'wall' && WITH_COUNTERTOP.has(b.type) && (
+                  <rect x={r.x} y={SY(r.y + r.h + COUNTERTOP)} width={r.w} height={COUNTERTOP} fill="#a8a29e" opacity={0.7} stroke="#78716c" strokeWidth={fs * 0.03} />
+                )}
+              </g>
+            )}
+            onDraw={(r) => {
+              if (overlapsOthers(null, r)) { notify('error', 'Dolaplar üst üste binemez.'); return; }
+              addKitchenCabinetAt(wall.id, r);
+            }}
+            onCommit={move}
+            onDelete={async (id) => {
+              const c = cabinets.find((x) => x.id === id);
+              if (c && await confirm({ title: 'Dolap silinsin mi?', message: `${c.code} duvardan kaldırılacak.`, confirmLabel: 'Sil', danger: true })) removeCabinet(id);
+            }}
+            onNudge={(id, dx, dy) => {
+              const b = boxes.find((x) => x.id === id);
+              if (!b) return;
+              const r = { x: Math.max(0, (b.x ?? 0) + dx), y: kitchenYLocked(b) ? b.elevation ?? 0 : Math.max(0, (b.elevation ?? 0) + dy), w: b.width, h: b.height };
+              if (!overlapsOthers(id, r)) moveKitchenCabinet(id, r);
+            }}
+            onObstacleCommit={(id, r) => updateObstacle(wall.id, id, r)}
+            onObstacleDelete={async (id) => {
+              if (await confirm({ title: 'Engel silinsin mi?', message: 'Engel duvardan kaldırılacak.', confirmLabel: 'Sil', danger: true })) removeObstacle(wall.id, id);
+            }}
+          />
+        </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-4 flex items-center justify-center">
-        {cabinets.length === 0 && (
-          <div className="absolute text-center text-sm text-[var(--color-text-muted)] bg-[var(--color-bg-card)]/90 border border-[var(--color-border)] rounded-lg px-4 py-3 shadow-sm pointer-events-none">
-            Bu duvarda dolap yok. Soldaki <b>Otomatik yerleşim</b> panelinden öneriyi uygulayın.
+      <aside data-tour="wall-box-panel" className="w-80 shrink-0 h-full overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-bg-card)] p-4">
+        {selectedCab && selectedBox ? (
+          <KitchenBoxPanel cab={selectedCab} box={selectedBox} onMove={(r) => move(selectedCab.id, r)}
+            selectedCell={selectedCell} onSelectCell={(ref) => setCellSel(ref ? { boxId: selectedCab.id, ref } : null)} />
+        ) : (
+          <div className="flex flex-col items-center text-center gap-2 pt-10 text-sm text-[var(--color-text-muted)]">
+            <MousePointerClick size={28} className="text-[var(--color-text-dim)]" />
+            <p>Bir dolaba tıklayın: rafları, kapakları ve bölmeleri burada ya da çizimde sürükleyerek ayarlayın.</p>
+            <p className="text-xs text-[var(--color-text-dim)]">Engele tıklayıp sürükleyin; kenarlarındaki tutamaçlarla boyutlandırın. Delete: sil · Oklar: 10 mm kaydır (Shift: 50 mm).</p>
           </div>
         )}
-        <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full h-full max-h-full" role="img" aria-label={`${wall.name} görünüşü`}>
-          <defs>
-            <pattern id="hatch" patternUnits="userSpaceOnUse" width="24" height="24" patternTransform="rotate(45)">
-              <line x1="0" y1="0" x2="0" y2="24" stroke="var(--color-warning)" strokeWidth="4" opacity="0.5" />
-            </pattern>
-          </defs>
-
-          {/* Duvar */}
-          <rect x={pad} y={pad} width={wall.effectiveWidth} height={wallH} fill="var(--color-bg-card)" stroke="var(--color-border)" strokeWidth={3} />
-          <line x1={pad - 60} y1={floorY} x2={pad + W + 60} y2={floorY} stroke="var(--color-text-muted)" strokeWidth={4} />
-
-          {/* Engeller */}
-          {wall.obstacles.map((o) => {
-            const info = obstacleInfo(o.type);
-            const isAppliance = o.type === 'appliance';
-            if (info.shape) {
-              return (
-                <g key={o.id}>
-                  <rect x={pad + o.x} y={floorY - o.y - o.height} width={o.width} height={o.height}
-                    fill={o.type === 'recess' ? 'var(--color-bg)' : '#d6d3d1'} opacity={0.8} stroke="#78716c" strokeWidth={3}
-                    strokeDasharray={o.type === 'recess' ? '14,8' : undefined} />
-                  <text x={pad + o.x + o.width / 2} y={floorY - o.y - o.height / 2} textAnchor="middle" dominantBaseline="middle"
-                    fill="#57534e" fontSize={Math.min(44, Math.max(24, o.width / 8))}>{info.label} {o.depth > 0 ? `· ${o.depth}` : ''}</text>
-                </g>
-              );
-            }
-            return (
-              <g key={o.id}>
-                <rect x={pad + o.x} y={floorY - o.y - o.height} width={o.width} height={o.height}
-                  fill={isAppliance ? 'var(--color-info)' : 'var(--color-error)'} opacity={0.12}
-                  stroke={isAppliance ? 'var(--color-info)' : 'var(--color-error)'} strokeWidth={3} strokeDasharray="14,8" />
-                <text x={pad + o.x + o.width / 2} y={floorY - o.y - o.height / 2} textAnchor="middle" dominantBaseline="middle"
-                  fill={isAppliance ? 'var(--color-info)' : 'var(--color-error)'} fontSize={Math.min(44, Math.max(24, o.width / 8))}>{info.label}</text>
-              </g>
-            );
-          })}
-
-          {/* Dolaplar */}
-          {placements.map((p) => {
-            const r = rectFor(p);
-            const key = `${p.cabinetId}-${p.copy}`;
-            const isHover = hover === p.cabinetId;
-            const comp = computedById.get(p.cabinetId);
-            const isFiller = p.type === 'filler';
-            const liftUp = cabinetById.get(p.cabinetId)?.doorOpening === 'up';
-            const drawerYs: number[] = [];
-            if (comp && comp.drawerFrontHeights.length > 1) {
-              let acc = 0;
-              const total = comp.drawerFrontHeights.reduce((a, b) => a + b, 0);
-              for (const h of comp.drawerFrontHeights.slice(0, -1)) { acc += h; drawerYs.push(r.y + (acc / total) * r.h); }
-            }
-            const fs = Math.max(26, Math.min(48, r.w / 9));
-            return (
-              <g key={key} className="cursor-pointer" onClick={() => openEditor(p.cabinetId)}
-                onMouseEnter={() => setHover(p.cabinetId)} onMouseLeave={() => setHover(null)}>
-                <title>{`${p.code} · ${p.name} (${p.width} × ${p.height})`}</title>
-                {p.row !== 'wall' && !isFiller && ON_LEGS.has(p.type) && (
-                  <rect x={r.x + 10} y={r.y + r.h} width={r.w - 20} height={PLINTH} fill="var(--color-text-dim)" opacity={0.25} />
-                )}
-                {WITH_COUNTERTOP.has(p.type) && (
-                  <rect x={r.x} y={r.y - COUNTERTOP} width={r.w} height={COUNTERTOP} fill="#a8a29e" opacity={0.6} />
-                )}
-                <rect x={r.x} y={r.y} width={r.w} height={r.h}
-                  fill={isFiller ? 'url(#hatch)' : isHover ? '#ffedd5' : '#fff7ed'}
-                  stroke={isHover ? 'var(--color-accent-hover)' : 'var(--color-accent)'} strokeWidth={isHover ? 6 : 3} />
-                {comp && liftUp && comp.doorCount > 1 && (
-                  <line x1={r.x + 6} y1={r.y + r.h / 2} x2={r.x + r.w - 6} y2={r.y + r.h / 2} stroke="var(--color-accent)" strokeWidth={2} opacity={0.6} />
-                )}
-                {comp && !liftUp && comp.doorCount > 1 && Array.from({ length: comp.doorCount - 1 }, (_, i) => (
-                  <line key={i} x1={r.x + (r.w / comp.doorCount) * (i + 1)} y1={r.y + 6} x2={r.x + (r.w / comp.doorCount) * (i + 1)} y2={r.y + r.h - 6}
-                    stroke="var(--color-accent)" strokeWidth={2} opacity={0.6} />
-                ))}
-                {drawerYs.map((y, i) => (
-                  <line key={i} x1={r.x + 6} y1={y} x2={r.x + r.w - 6} y2={y} stroke="var(--color-accent)" strokeWidth={2} opacity={0.6} />
-                ))}
-                {!isFiller && (
-                  <text x={r.x + r.w / 2} y={r.y + r.h / 2} textAnchor="middle" dominantBaseline="middle" fill="var(--color-text)" fontSize={fs} fontWeight={600}>
-                    {p.code}
-                  </text>
-                )}
-                {comp?.sink && p.row !== 'wall' && (
-                  <g pointerEvents="none">
-                    {comp.sink.bowls.map((b, i) => (
-                      <rect key={i} x={r.x + b.x} y={r.y} width={b.w} height={200} fill="none" stroke="#3b82f6" strokeWidth={3} strokeDasharray="10,6" />
-                    ))}
-                    {comp.sink.faucet && (
-                      <path d={`M ${r.x + comp.sink.faucet.x} ${r.y - COUNTERTOP} v -260 h 140 v 50`} fill="none" stroke="#27272a" strokeWidth={10} strokeLinecap="round" strokeLinejoin="round" />
-                    )}
-                  </g>
-                )}
-                <text x={r.x + r.w / 2} y={p.row === 'wall' ? r.y - 14 : floorY + 44} textAnchor="middle"
-                  fill="var(--color-text-muted)" fontSize={30} fontFamily="var(--font-mono)">{p.width}</text>
-              </g>
-            );
-          })}
-
-          {/* Toplam ölçü */}
-          <line x1={pad} y1={floorY + 80} x2={pad + wall.effectiveWidth} y2={floorY + 80} stroke="var(--color-text-dim)" strokeWidth={2} />
-          <line x1={pad} y1={floorY + 64} x2={pad} y2={floorY + 96} stroke="var(--color-text-dim)" strokeWidth={2} />
-          <line x1={pad + wall.effectiveWidth} y1={floorY + 64} x2={pad + wall.effectiveWidth} y2={floorY + 96} stroke="var(--color-text-dim)" strokeWidth={2} />
-          <text x={pad + wall.effectiveWidth / 2} y={floorY + 112} textAnchor="middle" fill="var(--color-text)" fontSize={34} fontFamily="var(--font-mono)">
-            {wall.effectiveWidth}
-          </text>
-        </svg>
-      </div>
+      </aside>
     </div>
   );
 }

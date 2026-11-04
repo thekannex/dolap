@@ -18,9 +18,12 @@ export const WITH_COUNTERTOP: ReadonlySet<CabinetType> = new Set<CabinetType>(['
 const WALL_GAP = 800;
 const LOOSE_GAP = 150;
 
-/** Dolabın alt kenarının yerden yüksekliği (mm). */
-export function elevationFor(cab: Pick<ProjectCabinet, 'type' | 'row' | 'height' | 'plinthHeight'>, wallHeight = 2500): number {
-  if (cab.row === 'wall') return Math.max(0, Math.min(UPPER_BOTTOM, wallHeight - cab.height));
+/** Dolabın alt kenarının yerden yüksekliği (mm). Üst dolap sürüklenip yüksekliği verilmişse o kullanılır. */
+export function elevationFor(cab: Pick<ProjectCabinet, 'type' | 'row' | 'height' | 'plinthHeight'> & { elevation?: number | null }, wallHeight = 2500): number {
+  if (cab.row === 'wall') {
+    if (cab.elevation !== null && cab.elevation !== undefined) return Math.max(0, cab.elevation);
+    return Math.max(0, Math.min(UPPER_BOTTOM, wallHeight - cab.height));
+  }
   if (ON_LEGS.has(cab.type) && !(cab.plinthHeight > 0)) return KITCHEN_LEG_HEIGHT;
   return 0;
 }

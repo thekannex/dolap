@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Download, RefreshCw, X, ExternalLink, Loader2, AlertTriangle } from 'lucide-react';
 import { saveNow } from '../../../stores/autosave';
 import { updateApi, useUpdateState } from '../../hooks/use-update';
+import { useWebUpdated } from '../../../web/web-app';
 
 const mb = (b?: number) => (b ? `${(b / 1024 / 1024).toFixed(0)} MB` : '');
 
@@ -11,6 +12,19 @@ export default function UpdateBanner() {
   const [hidden, setHidden] = useState<string | null>(null);
   const [notes, setNotes] = useState(false);
   const api = updateApi();
+  const webUpdated = useWebUpdated();
+  if (webUpdated) {
+    return (
+      <div role="status" className="shrink-0 border-b border-[var(--color-accent)]/30 bg-[var(--color-accent)]/8 px-4 py-2 flex items-center gap-3 text-sm">
+        <RefreshCw size={16} className="text-[var(--color-accent)] shrink-0" />
+        <span className="flex-1">Dolap'ın yeni sürümü yüklendi; sayfayı yenileyince devreye girer.</span>
+        <button className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)]"
+          onClick={() => { void saveNow().finally(() => window.location.reload()); }}>
+          <RefreshCw size={13} /> Yenile
+        </button>
+      </div>
+    );
+  }
   if (!s || !api) return null;
 
   const showError = s.state === 'error' && s.during !== 'check';

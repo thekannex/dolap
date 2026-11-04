@@ -230,6 +230,8 @@ export default function ComposerPage() {
   const selected = group.find((c) => c.id === activeCabinetId) ?? null;
   const selectedCell = selected && cellSel?.boxId === selected.id ? cellSel.ref : null;
   const updateCabinet = useProjectStore((s) => s.updateCabinet);
+  const updateObstacle = useProjectStore((s) => s.updateObstacle);
+  const removeObstacle = useProjectStore((s) => s.removeObstacle);
 
   if (!composition) {
     if (job?.kind === 'built_in') {
@@ -285,7 +287,7 @@ export default function ComposerPage() {
           <ContentPicker value={newContent} onChange={setNewContent} />
           <NumInput label="Derinlik" value={newDepth} onChange={setNewDepth} min={100} max={1200} />
           <p className="text-[11px] text-[var(--color-text-dim)]">
-            Boş alanda sürükleyerek kutu çizin. Kutuyu sürükleyip taşıyın, kenarlarından boyutlandırın. Delete: sil · Oklar: 10mm kaydır (Shift: 50mm).
+            Boş alanda sürükleyerek kutu çizin. Kutuyu sürükleyip taşıyın, kenarlarından boyutlandırın. Duvardaki kolon, kiriş ve pencereler de sürüklenir. Delete: sil · Oklar: 10mm kaydır (Shift: 50mm).
           </p>
         </div>
       </aside>
@@ -327,6 +329,10 @@ export default function ComposerPage() {
               const r = { x: Math.max(0, (b.x ?? 0) + dx), y: Math.max(0, (b.elevation ?? 0) + dy), w: b.width, h: b.height };
               if (!overlapsOthers(id, r)) setBoxGeometry(id, { x: r.x, elevation: r.y });
             }}
+            onObstacleCommit={wall ? (id, r) => updateObstacle(wall.id, id, r) : undefined}
+            onObstacleDelete={wall ? async (id) => {
+              if (await confirm({ title: 'Engel silinsin mi?', message: 'Engel duvardan kaldırılacak.', confirmLabel: 'Sil', danger: true })) removeObstacle(wall.id, id);
+            } : undefined}
           />
         </div>
       </div>

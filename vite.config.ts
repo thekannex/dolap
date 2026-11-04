@@ -17,16 +17,47 @@ const cspPlugin = (): Plugin => ({
 // Sürüm numarası package.json'dan derlemeye gömülür (başlıkta görünür)
 const APP_VERSION: string = JSON.parse(readFileSync(path.resolve(import.meta.dirname, 'package.json'), 'utf8')).version
 
+/**
+ * Tarayıcı sürümü (vite build --mode web): uygulama bildirimi, çevrimdışı çalışma için service worker
+ * (derlenen bütün dosyaları önbelleğe alır) ve sunucu için .htaccess üretir.
+ */
+const webAppPlugin = (): Plugin => ({
+  name: 'dolap-web',
+  apply: 'build',
+  transformIndexHtml: (html) => html.replace('</head>',
+    '    <link rel="manifest" href="./manifest.webmanifest" />\n    <meta name="theme-color" content="#ea580c" />\n    <link rel="apple-touch-icon" href="./icon-512.png" />\n  </head>'),
+  generateBundle(_options, bundle) {
+    this.emitFile({ type: 'asset', fileName: 'icon-512.png', source: readFileSync(path.resolve(import.meta.dirname, 'build/icon.png')) })
+    this.emitFile({
+      type: 'asset', fileName: 'manifest.webmanifest', source: JSON.stringify({
+        name: 'Dolap — Ölçü, Kesim ve Teklif', short_name: 'Dolap', lang: 'tr',
+        start_url: './', scope: './', display: 'standalone', background_color: '#ffffff', theme_color: '#ea580c',
+        icons: [
+          { src: './favicon.svg', sizes: 'any', type: 'image/svg+xml' },
+          { src: './icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        ],
+      }, null, 2),
+    })
+    const files = ['./', ...Object.keys(bundle).filter((f) => f !== 'index.html').map((f) => `./${f}`), './icon-512.png', './manifest.webmanifest', './favicon.svg']
+    const sw = readFileSync(path.resolve(import.meta.dirname, 'src/web/sw-template.js'), 'utf8')
+      .replace('__CACHE__', `dolap-${APP_VERSION}`)
+      .replace('__FILES__', JSON.stringify([...new Set(files)]))
+    this.emitFile({ type: 'asset', fileName: 'sw.js', source: sw })
+    this.emitFile({ type: 'asset', fileName: '.htaccess', source: readFileSync(path.resolve(import.meta.dirname, 'src/web/htaccess.txt'), 'utf8') })
+  },
+})
+
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [react(), tailwindcss(), cspPlugin()],
-  define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
+export default defineConfig(({ mode }) => ({
+  plugins: [react(), tailwindcss(), cspPlugin(), ...(mode === 'web' ? [webAppPlugin()] : [])],
+  define: { __APP_VERSION__: JSON.stringify(APP_VERSION), __WEB__: JSON.stringify(mode === 'web') },
   resolve: {
     alias: { '@': path.resolve(import.meta.dirname, './src') },
   },
-  // Masaüstü uygulamada dosyalar file:// üzerinden yüklenir; göreli yollar gerekir.
+  // Masaüstü uygulamada dosyalar file:// üzerinden yüklenir; göreli yollar gerekir (web sürümü de alt klasörde çalışır).
   base: './',
   build: {
+    outDir: mode === 'web' ? 'dist-web' : 'dist',
     chunkSizeWarningLimit: 2500,
   },
   test: {
@@ -46,4 +77,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))
