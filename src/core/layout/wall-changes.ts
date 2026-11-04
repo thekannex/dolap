@@ -31,7 +31,7 @@ export function kitchenWallStatus(wall: Wall, cabinets: ProjectCabinet[]): { cha
     const x1 = p.x + p.width;
     for (const o of [...wall.obstacles, ...sideObstaclesOnWall(wall, cab.depth)]) {
       const pr = protrusionOf(o);
-      if (pr <= 0 || o.type === 'appliance') continue;
+      if (pr <= 0 || o.type === 'appliance' || (cab.backOffset ?? 0) >= pr - 0.5) continue;
       if (x0 < o.x + o.width - 0.5 && x1 > o.x + 0.5 && y0 < o.y + o.height - 0.5 && y1 > o.y + 0.5) {
         conflicts.push({ cabinetId: cab.id, code: cab.code, reason: `engelle çakışıyor (${o.type === SIDE_BLOCK ? 'yan duvardaki engel' : o.type === 'window' ? 'pencere' : o.type === 'door' ? 'kapı' : 'duvar çıkıntısı'})` });
         break;

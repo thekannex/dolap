@@ -6,13 +6,14 @@ import { useProjectComputation } from '../../hooks/use-cabinet-calculations';
 import type { ProjectCabinet } from '../../../core/models/cabinet';
 import type { ComputedCabinet } from '../../../core/engine/compute-cabinet';
 import {
-  BOX_CONTENTS, COMPOSITION_TEMPLATES, boxesOverlap, checkSharing, compositionBounds, detectBoxContent, validateComposition,
+  COMPOSITION_TEMPLATES, boxesOverlap, checkSharing, compositionBounds, detectBoxContent, validateComposition,
 } from '../../../core/layout/composition';
 import type { BoxContent } from '../../../core/layout/composition';
 import { formatNumber } from '../../../core/utils/format';
 import { Button, Card, EmptyState, NumInput, Section, TextInput, Toggle } from '../shared/ui';
 import { WarningItem } from '../cabinet-editor/DetailPanels';
 import ComposerCanvas from './ComposerCanvas';
+import ContentPicker from '../shared/ContentPicker';
 import WallChangeNotice from '../wall-survey/WallChangeNotice';
 import InteriorEditor from '../interior/InteriorEditor';
 import JointControls from '../shared/JointControls';
@@ -20,21 +21,6 @@ import BehindDoorControl from '../shared/BehindDoorControl';
 import type { CellRef } from '../interior/InteriorSvg';
 import { interiorFromCabinet } from '../../../core/engine/interior';
 import type { Rect } from './ComposerCanvas';
-
-function ContentPicker({ value, onChange }: { value: BoxContent; onChange: (v: BoxContent) => void }) {
-  return (
-    <div className="grid grid-cols-2 gap-1" role="radiogroup" aria-label="Kutu içeriği">
-      {BOX_CONTENTS.map((c) => (
-        <button key={c.value} role="radio" aria-checked={value === c.value} title={c.hint} onClick={() => onChange(c.value)}
-          className={`px-2 py-1.5 rounded-md text-xs font-medium border text-left transition-colors ${
-            value === c.value
-              ? 'bg-[var(--color-accent)] text-white border-[var(--color-accent)]'
-              : 'bg-[var(--color-bg-input)] text-[var(--color-text-muted)] border-[var(--color-border)] hover:border-[var(--color-accent)]'
-          }`}>{c.label}</button>
-      ))}
-    </div>
-  );
-}
 
 function BoxPanel({ box, group, selectedCell, onSelectCell }: {
   box: ProjectCabinet; group: ProjectCabinet[]; selectedCell: CellRef | null; onSelectCell: (ref: CellRef | null) => void;

@@ -8,11 +8,12 @@ import WallPicker from './WallPicker';
 import WallShape3D from './WallShape3D';
 import { Button, EmptyState } from '../shared/ui';
 
-/** Duvar dolabı işi, 2. adım: duvar şekli (3B: kolon, kiriş, çıkıntı) ve dolap alanı. */
+/** 2. adım: duvar şekli (3B: kolon, kiriş, çıkıntı). Duvar dolabında dolap alanı çizilir, mutfakta dolaplar görünür. */
 export default function WallShapePage() {
   const setActivePage = useUIStore((s) => s.setActivePage);
   const addWall = useProjectStore((s) => s.addWall);
   const wall = useActiveWall();
+  const kitchen = useProjectStore((s) => s.project?.jobs.find((j) => j.id === s.activeJobId)?.kind === 'kitchen');
 
   if (!wall) {
     return (
@@ -34,7 +35,7 @@ export default function WallShapePage() {
       </aside>
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <WallChangeNotice wall={wall} />
-        <WallShape3D key={wall.id} wall={wall} />
+        <WallShape3D key={wall.id} wall={wall} kitchen={kitchen} />
       </div>
     </div>
   );

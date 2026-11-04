@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { kitchenCanvas, kitchenMove, kitchenTypeForRect, kitchenYLocked } from '../../core/layout/kitchen-canvas';
 import { elevationFor, KITCHEN_LEG_HEIGHT, UPPER_BOTTOM } from '../../core/layout/scene-layout';
 import { createProjectCabinet } from '../../core/engine/cabinet-factory';
+import { compositionComputeOptions } from '../../core/layout/composition';
 import type { CabinetType } from '../../core/models/cabinet';
 
 const cab = (id: string, type: CabinetType, width: number, x: number | null = null) =>
@@ -41,6 +42,15 @@ describe('mutfak çizim alanı', () => {
     expect(patch.get('u')).toEqual({ x: 100, elevation: 1600 });
     expect(elevationFor({ ...u, elevation: 1600 })).toBe(1600);
     expect(elevationFor(u)).toBe(UPPER_BOTTOM);
+  });
+
+  it('mutfakta ortak dikme: bitişik komşu varsa sol dikme kesilmez', () => {
+    const a = cab('a', 'base', 600, 0);
+    const b = { ...cab('b', 'base', 600, 600), shareLeft: true };
+    const far = { ...cab('c', 'base', 600, 1300), shareLeft: true };
+    expect(compositionComputeOptions(b, [a, b, far]).omitLeftSide).toBe(true);
+    expect(compositionComputeOptions(far, [a, b, far]).omitLeftSide).toBe(false);
+    expect(compositionComputeOptions(a, [a, b, far])).toEqual({});
   });
 
   it('çizilen kutunun türü konumuna ve boyuna göre seçilir', () => {

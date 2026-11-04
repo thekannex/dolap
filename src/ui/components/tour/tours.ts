@@ -50,6 +50,7 @@ export const TOURS: Partial<Record<PageId, TourStep[]>> = {
     { target: 'shape-toolbar', title: 'Dolap alanı çiz', text: 'Bu araçla duvarın üstünde sürükleyerek dolabın kaplayacağı alanı çizin. Seç / taşı ile engelleri taşımaya dönersiniz.' },
     { target: 'shape-region', title: 'Dolap alanı', text: 'Alanı ölçüyle de verebilirsiniz; "Boydan boya" tüm duvarı kaplar. "En geniş modül" kutuların enini, "Üst kutu yüksekliği" ayrı asma kutuları belirler.' },
     { target: 'shape-result', title: 'Sonuç', text: 'Alan engellere göre kutulara bölünür: çıkıntının önüne sığ dolap, yer kalmayan yere dolgu gelir. "Dolabı oluştur" ile kurulur; raf ve kapakları 2. adımda düzenleyin.' },
+    { target: 'shape-kitchen', title: 'Mutfak', text: 'Mutfakta dolaplar bir sonraki adımda önerilir. Burada yerleştirdiğiniz kolon, kiriş ve pencereye öneri uyar: kolonun önüne sığ dolap, kirişin altına kısa üst dolap gelir.' },
   ],
   composer: [
     { target: 'composer-list', title: 'Çizimler', text: 'Bu işin çizimleri. Bir işte birden çok çizim olabilir; + ile yenisi eklenir, adı aşağıdan değiştirilir.' },

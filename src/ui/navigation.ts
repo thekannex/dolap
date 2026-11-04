@@ -8,7 +8,8 @@ export interface Step { id: PageId; label: string; icon: typeof MapPin; hint: st
 export const JOB_STEPS: Record<JobKind, Step[]> = {
   kitchen: [
     { id: 'wall-survey', label: 'Duvar ölçüsü', icon: Ruler, hint: 'Duvar ölçüsü, yan duvar açıları, tavan ve zemin farkları, engeller' },
-    { id: 'wall-layout', label: 'Yerleşim', icon: MapPin, hint: 'Cihazlar ve otomatik alt/üst dolap önerisi' },
+    { id: 'wall-shape', label: 'Şekil ve alan', icon: Box, hint: 'Kolon, kiriş, çıkıntı ve pencere (3B)' },
+    { id: 'wall-layout', label: 'Yerleşim', icon: MapPin, hint: 'Duvar şekline uyan alt/üst dolap önerisi; dolapları sürükleyerek düzenleyin' },
     { id: 'editor', label: 'Dolaplar', icon: PenTool, hint: 'Dolapları tek tek ayarlayın' },
   ],
   built_in: [

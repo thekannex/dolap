@@ -1,39 +1,29 @@
 import { useMemo, useState } from 'react';
 import { Wand2 } from 'lucide-react';
 import type { Wall } from '../../../core/models/project';
-import { planModules } from '../../../core/layout/module-planner';
+import { planKitchenWall, kitchenRowSummary, DEFAULT_KITCHEN_PLAN } from '../../../core/layout/kitchen-fit';
 import { useProjectStore } from '../../../stores/project-store';
 import { useUIStore } from '../../../stores/ui-store';
 import { Button, Toggle } from '../shared/ui';
 
 const ALL_WIDTHS = [300, 350, 400, 450, 500, 600, 800, 900, 1000];
-const DEFAULT_WIDTHS = [300, 400, 450, 500, 600];
 
-function useWallPlan(wall: Wall, widths: number[]) {
-  return useMemo(() => {
-    const fixed = wall.obstacles
-      .filter((o) => o.type === 'appliance')
-      .map((o) => ({ x: o.x, width: o.width, name: 'Cihaz' }));
-    return planModules({
-      effectiveWidth: wall.effectiveWidth,
-      standardWidths: [...widths].sort((a, b) => a - b),
-      fixedModules: fixed,
-      minFillerWidth: 30,
-      maxFillerWidth: 150,
-    });
-  }, [wall.effectiveWidth, wall.obstacles, widths]);
-}
-
+/**
+ * Otomatik yerleşim: seçilen genişliklerle alt ve üst sıra. Duvar dolabıyla aynı engel hesabı:
+ * kolon önüne sığ dolap, kiriş altında kısa üst dolap, pencere ve cihaz boşluğunun önü boş.
+ */
 export default function WallPlanPanel({ wall }: { wall: Wall }) {
-  const applyWallPlan = useProjectStore((s) => s.applyWallPlan);
-  const existing = useProjectStore((s) => s.project?.cabinets.filter((c) => c.wallId === wall.id).length ?? 0);
+  const applyKitchenPlan = useProjectStore((s) => s.applyKitchenPlan);
+  const existing = useProjectStore((s) => s.project?.cabinets.filter((c) => c.wallId === wall.id && !c.groupId).length ?? 0);
   const confirm = useUIStore((s) => s.confirm);
   const notify = useUIStore((s) => s.notify);
-  const [widths, setWidths] = useState<number[]>(DEFAULT_WIDTHS);
-  const [includeUpper, setIncludeUpper] = useState(true);
+  const [widths, setWidths] = useState<number[]>(wall.kitchenPlan?.widths ?? DEFAULT_KITCHEN_PLAN.widths);
+  const [includeUpper, setIncludeUpper] = useState(wall.kitchenPlan?.includeUpper ?? DEFAULT_KITCHEN_PLAN.includeUpper);
 
-  const plan = useWallPlan(wall, widths);
-  const cabinets = plan.modules.filter((m) => m.type !== 'appliance');
+  const plan = useMemo(() => planKitchenWall(wall, { widths, includeUpper }), [wall, widths, includeUpper]);
+  const cabinets = plan.modules.filter((m) => m.kind === 'cabinet');
+  const shallow = cabinets.filter((m) => m.backOffset > 0).length;
+  const shortUpper = cabinets.filter((m) => m.row === 'wall' && m.height < 720).length;
 
   const toggle = (w: number) => setWidths((cur) => (cur.includes(w) ? cur.filter((x) => x !== w) : [...cur, w]));
 
@@ -47,8 +37,15 @@ export default function WallPlanPanel({ wall }: { wall: Wall }) {
       });
       if (!ok) return;
     }
-    const n = applyWallPlan(wall.id, plan.modules, { includeUpper, replace: true });
-    notify('success', `${n} dolap/dolgu eklendi. Dolaplar sayfasından ayrıntıları düzenleyebilirsiniz.`);
+    const n = applyKitchenPlan(wall.id, plan.modules, { widths, includeUpper });
+    notify('success', `${n} dolap/dolgu eklendi. Çizimde sürükleyerek ya da sağdaki panelden düzenleyebilirsiniz.`);
+  };
+
+  const row = (r: 'base' | 'wall', label: string) => {
+    const text = kitchenRowSummary(plan.modules, r);
+    return (
+      <p><span className="text-[var(--color-text-dim)] font-sans">{label}: </span>{text || <span className="text-[var(--color-text-dim)]">dolap yok</span>}</p>
+    );
   };
 
   return (
@@ -68,14 +65,20 @@ export default function WallPlanPanel({ wall }: { wall: Wall }) {
         </div>
       </div>
 
-      <div className="text-xs rounded-md bg-[var(--color-bg)] p-2 font-mono leading-relaxed">
-        {cabinets.length === 0 ? <span className="text-[var(--color-text-dim)]">Öneri yok</span> : cabinets.map((m, i) => (
-          <span key={i} className={m.type === 'filler' ? 'text-[var(--color-warning)]' : ''}>
-            {i > 0 && ' + '}{m.type === 'filler' ? `dolgu ${m.width}` : m.width}
-          </span>
-        ))}
+      <div className="text-xs rounded-md bg-[var(--color-bg)] p-2 font-mono leading-relaxed flex flex-col gap-1">
+        {row('base', 'Alt')}
+        {includeUpper && row('wall', 'Üst')}
       </div>
-      {plan.warning && <p className="text-[11px] text-[var(--color-warning)]">{plan.warning}</p>}
+      {(shallow > 0 || shortUpper > 0 || plan.blocked.length > 0) && (
+        <p className="text-[11px] text-[var(--color-text-muted)]">
+          Duvar şekline göre: {[
+            shallow > 0 && `${shallow} sığ dolap (kolon/çıkıntı önü)`,
+            shortUpper > 0 && `${shortUpper} kısa üst dolap (kiriş altı)`,
+            plan.blocked.length > 0 && `${plan.blocked.length} boş bölge (pencere, kapı, cihaz)`,
+          ].filter(Boolean).join(' · ')}
+        </p>
+      )}
+      {plan.warnings.map((w) => <p key={w} className="text-[11px] text-[var(--color-warning)]">{w}</p>)}
 
       <Toggle label="Üst dolapları da ekle" checked={includeUpper} onChange={setIncludeUpper} />
       <Button variant="primary" onClick={apply} disabled={widths.length === 0 || cabinets.length === 0}>

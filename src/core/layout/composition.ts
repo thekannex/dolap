@@ -2,6 +2,7 @@ import type { CabinetInterior, CabinetState, ProjectCabinet } from '../models/ca
 import { newCell, newColumn } from '../engine/interior';
 import type { ValidationWarning } from '../models/common';
 import type { ComputeOptions } from '../engine/compute-cabinet';
+import { kitchenCanvas } from './kitchen-canvas';
 
 /** Kutunun içeriği: çizimde seçilir, dolabın kapak/çekmece/raf ayarlarına çevrilir. */
 export type BoxContent = 'doors' | 'drawers' | 'open' | 'lift' | 'hanger' | 'niche';
@@ -132,7 +133,15 @@ export function checkSharing(cab: Box, group: Box[]): SharingCheck {
 
 /** Hesap için kutunun ek seçenekleri: geçerli ortak paneller ve yerden yükseklik. */
 export function compositionComputeOptions(cab: ProjectCabinet, all: ProjectCabinet[]): ComputeOptions {
-  if (!cab.groupId) return {};
+  if (!cab.groupId) {
+    // Mutfak dolabı: komşuları duvardaki gerçek yerlerine göre (yalnız istenmişse)
+    if (!cab.wallId || !(cab.shareLeft || cab.shareBottom)) return {};
+    const { boxes } = kitchenCanvas(all.filter((c) => c.wallId === cab.wallId && !c.groupId), 2600);
+    const me = boxes.find((b) => b.id === cab.id);
+    if (!me) return {};
+    const check = checkSharing(me, boxes);
+    return { omitLeftSide: cab.shareLeft && check.left.possible, omitBottom: cab.shareBottom && check.bottom.possible };
+  }
   const group = all.filter((c) => c.groupId === cab.groupId);
   const check = checkSharing(cab, group);
   return {

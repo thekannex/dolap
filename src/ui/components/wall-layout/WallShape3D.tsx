@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
 import { Edges, Html, OrbitControls } from '@react-three/drei';
-import { MousePointer2, PenTool, Maximize, Trash2, Hammer, ExternalLink } from 'lucide-react';
+import { MousePointer2, PenTool, Maximize, Trash2, Hammer, ExternalLink, ArrowRight } from 'lucide-react';
 import { useProjectStore } from '../../../stores/project-store';
 import { useUIStore } from '../../../stores/ui-store';
 import type { Obstacle, Wall } from '../../../core/models/project';
@@ -13,6 +13,7 @@ import { CabinetModel, SideWalls, WallModel } from '../cabinet-3d/models';
 import { S } from '../cabinet-3d/scale';
 import { Button, NumInput, Section } from '../shared/ui';
 import { OBSTACLE_TYPES, obstacleInfo } from './obstacle-types';
+import { kitchenCanvas } from '../../../core/layout/kitchen-canvas';
 
 const SNAP = 10;
 const snap = (v: number) => Math.round(v / SNAP) * SNAP;
@@ -27,7 +28,7 @@ type Drag =
  * Kolon, kiriş, çıkıntı ve girinti sürüklenerek konumlanır; duvarın üstüne çizilen alan
  * engellere göre kutulara bölünür ve tek tıkla serbest çizim kompozisyonu olarak kurulur.
  */
-export default function WallShape3D({ wall }: { wall: Wall }) {
+export default function WallShape3D({ wall, kitchen = false }: { wall: Wall; kitchen?: boolean }) {
   const project = useProjectStore((s) => s.project);
   const addObstacle = useProjectStore((s) => s.addObstacle);
   const updateObstacle = useProjectStore((s) => s.updateObstacle);
@@ -61,6 +62,8 @@ export default function WallShape3D({ wall }: { wall: Wall }) {
   const fit = useMemo(() => fitWall({ ...wall, obstacles }, liveRegion, { topHeight, maxModule }),
     [wall, obstacles, liveRegion, topHeight, maxModule]);
   const builtBoxes = useMemo(() => (target && project ? project.cabinets.filter((c) => c.groupId === target.id) : []), [project, target]);
+  // Mutfakta duvardaki dolaplar gerçek yerlerinde (sığ dolap duvardan açık)
+  const kitchenBoxes = useMemo(() => (kitchen && project ? kitchenCanvas(project.cabinets.filter((c) => c.wallId === wall.id && !c.groupId), H).boxes : []), [kitchen, project, wall.id, H]);
 
   const selected = wall.obstacles.find((o) => o.id === selectedId) ?? null;
 
@@ -137,9 +140,11 @@ export default function WallShape3D({ wall }: { wall: Wall }) {
           <Button size="sm" variant={tool === 'select' ? 'primary' : 'ghost'} onClick={() => setTool('select')} title="Engelleri seç ve sürükle">
             <MousePointer2 size={13} /> Seç / taşı
           </Button>
-          <Button size="sm" variant={tool === 'region' ? 'primary' : 'ghost'} onClick={() => setTool('region')} title="Duvarın üstünde sürükleyerek dolap alanını çiz">
-            <PenTool size={13} /> Dolap alanı çiz
-          </Button>
+          {!kitchen && (
+            <Button size="sm" variant={tool === 'region' ? 'primary' : 'ghost'} onClick={() => setTool('region')} title="Duvarın üstünde sürükleyerek dolap alanını çiz">
+              <PenTool size={13} /> Dolap alanı çiz
+            </Button>
+          )}
         </div>
         <p className="absolute bottom-2 left-2 z-10 text-[11px] text-[#57534e] bg-white/80 rounded px-1.5 py-0.5">
           {tool === 'region' ? 'Duvarın üstünde sürükleyin: dolabın kaplayacağı alan' : 'Engeli sürükleyin · Boşta sürükle: döndür · Tekerlek: yakınlaş · Sağ tık: kaydır'}
@@ -163,7 +168,7 @@ export default function WallShape3D({ wall }: { wall: Wall }) {
           )}
 
           {/* Dolap alanı */}
-          {r.width > 0 && r.height > 0 && (
+          {!kitchen && r.width > 0 && r.height > 0 && (
             <mesh position={[(r.x + r.width / 2) / S, (r.y + r.height / 2) / S, r.depth / S / 2]} raycast={() => null}>
               <boxGeometry args={[r.width / S, r.height / S, r.depth / S]} />
               <meshBasicMaterial color="#ea580c" transparent opacity={view === 'preview' || drag ? 0.04 : 0} depthWrite={false} />
@@ -172,7 +177,7 @@ export default function WallShape3D({ wall }: { wall: Wall }) {
           )}
 
           {/* Önizleme: hesaplanan kutular */}
-          {(view === 'preview' || drag || !target) && fit.boxes.map((b, i) => (
+          {!kitchen && (view === 'preview' || drag || !target) && fit.boxes.map((b, i) => (
             <mesh key={i} position={[(b.x + b.width / 2) / S, (b.elevation + b.height / 2) / S, (b.backOffset + b.depth / 2) / S]} raycast={() => null}>
               <boxGeometry args={[b.width / S - 0.04, b.height / S - 0.04, b.depth / S - 0.02]} />
               <meshStandardMaterial color={b.kind === 'filler' ? '#fdba74' : b.backOffset > 0 ? '#a5b4fc' : '#93c5fd'} transparent opacity={0.55} />
@@ -188,7 +193,13 @@ export default function WallShape3D({ wall }: { wall: Wall }) {
           ))}
 
           {/* Kurulu dolap */}
-          {view === 'built' && !drag && builtBoxes.map((c) => (
+          {kitchenBoxes.map((c) => (
+            <group key={c.id} position={[((c.x ?? 0) + c.width / 2) / S, (c.elevation ?? 0) / S, ((c.backOffset ?? 0) + c.depth / 2) / S]}>
+              <CabinetModel cabinet={c} showFronts />
+            </group>
+          ))}
+
+          {!kitchen && view === 'built' && !drag && builtBoxes.map((c) => (
             <group key={c.id} position={[((c.x ?? 0) + c.width / 2) / S, (c.elevation ?? 0) / S, ((c.backOffset ?? 0) + c.depth / 2) / S]}>
               <CabinetModel cabinet={c} showFronts />
             </group>
@@ -235,65 +246,77 @@ export default function WallShape3D({ wall }: { wall: Wall }) {
           )}
         </Section>
 
-        <Section title="Dolap alanı" tour="shape-region">
-          <div className="flex gap-1.5">
-            <Button size="sm" variant={tool === 'region' ? 'primary' : 'secondary'} onClick={() => setTool(tool === 'region' ? 'select' : 'region')}>
-              <PenTool size={13} /> Duvara çiz
-            </Button>
-            <Button size="sm" onClick={() => { const u = wallRange(wall, region.depth); setRegion({ ...region, x: u.x0, y: 0, width: u.x1 - u.x0, height: H }); setView('preview'); }} title="Duvarı boydan boya kapla">
-              <Maximize size={13} /> Boydan boya
-            </Button>
-          </div>
-          <div className="grid grid-cols-2 gap-1.5">
-            <NumInput label="Soldan" value={region.x} onChange={(v) => { setRegion({ ...region, x: v }); setView('preview'); }} max={L} />
-            <NumInput label="Yerden" value={region.y} onChange={(v) => { setRegion({ ...region, y: v }); setView('preview'); }} max={H} />
-            <NumInput label="Genişlik" value={region.width} onChange={(v) => { setRegion({ ...region, width: v }); setView('preview'); }} min={100} max={20000} />
-            <NumInput label="Yükseklik" value={region.height} onChange={(v) => { setRegion({ ...region, height: v }); setView('preview'); }} min={100} max={6000} />
-            <NumInput label="Derinlik" value={region.depth} onChange={(v) => { setRegion({ ...region, depth: v }); setView('preview'); }} min={100} max={1200} />
-            <NumInput label="En geniş modül" value={maxModule} onChange={(v) => { setMaxModule(Math.max(300, v)); setView('preview'); }} min={300} max={2400} />
-            <NumInput label="Üst kutu yüksekliği" value={topHeight} onChange={(v) => { setTopHeight(v); setView('preview'); }} max={1200}
-              hint="0 = ayrı üst kutu yok" />
-          </div>
-        </Section>
-
-        <Section title="Sonuç" tour="shape-result">
-          <p className="text-sm">
-            <span className="font-semibold">{cabinetsN}</span> dolap
-            {shallowN > 0 && <span className="text-[var(--color-text-muted)]"> ({shallowN} sığ)</span>}
-            {fillersN > 0 && <> · <span className="font-semibold">{fillersN}</span> dolgu</>}
-            {fit.blocked.length > 0 && <span className="text-[var(--color-text-muted)]"> · {fit.blocked.length} boş bölge</span>}
-          </p>
-          <p className="text-[11px] text-[var(--color-text-dim)]">
-            Önler duvardan {region.depth} mm'de hizalanır. Çıkıntının önüne sığ dolap (mor), yer kalmayan yere dolgu paneli (turuncu) gelir; kirişin altında dolap kısalır, önünde sığ üst kutu oluşur. Pencere ve kapının önü boş kalır.
-          </p>
-          {fit.warnings.map((w) => <p key={w} className="text-[11px] text-[var(--color-warning)]">{w}</p>)}
-          {target && (
-            <div role="radiogroup" aria-label="Görünüm" className="flex rounded-md border border-[var(--color-border)] overflow-hidden">
-              {([['built', 'Kurulu dolap'], ['preview', 'Önizleme']] as const).map(([val, label]) => (
-                <button key={val} role="radio" aria-checked={view === val} onClick={() => setView(val)}
-                  className={`flex-1 px-2 py-1 text-xs font-medium transition-colors ${view === val ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-muted)] hover:bg-[var(--color-bg-hover)]/60'}`}>
-                  {label}
-                </button>
-              ))}
+        {kitchen ? (
+          <Section title="Mutfak" tour="shape-kitchen">
+            <p className="text-sm"><span className="font-semibold">{kitchenBoxes.length}</span> dolap bu duvarda</p>
+            <p className="text-[11px] text-[var(--color-text-dim)]">
+              Kolon, kiriş, çıkıntı ve pencereyi burada yerleştirin. Yerleşim adımındaki öneri bunlara uyar: kolonun önüne sığ dolap, kirişin altına kısa üst dolap gelir; pencere ve cihaz boşluğunun önü boş kalır.
+            </p>
+            <Button variant="primary" onClick={() => setActivePage('wall-layout')}>Yerleşim adımına geç <ArrowRight size={14} /></Button>
+          </Section>
+        ) : (
+          <>
+          <Section title="Dolap alanı" tour="shape-region">
+            <div className="flex gap-1.5">
+              <Button size="sm" variant={tool === 'region' ? 'primary' : 'secondary'} onClick={() => setTool(tool === 'region' ? 'select' : 'region')}>
+                <PenTool size={13} /> Duvara çiz
+              </Button>
+              <Button size="sm" onClick={() => { const u = wallRange(wall, region.depth); setRegion({ ...region, x: u.x0, y: 0, width: u.x1 - u.x0, height: H }); setView('preview'); }} title="Duvarı boydan boya kapla">
+                <Maximize size={13} /> Boydan boya
+              </Button>
             </div>
-          )}
-          {target ? (
-            <>
-              <Button variant="primary" disabled={cabinetsN + fillersN === 0} onClick={() => build(true)}>
-                <Hammer size={14} /> "{target.name}" dolabını yenile
+            <div className="grid grid-cols-2 gap-1.5">
+              <NumInput label="Soldan" value={region.x} onChange={(v) => { setRegion({ ...region, x: v }); setView('preview'); }} max={L} />
+              <NumInput label="Yerden" value={region.y} onChange={(v) => { setRegion({ ...region, y: v }); setView('preview'); }} max={H} />
+              <NumInput label="Genişlik" value={region.width} onChange={(v) => { setRegion({ ...region, width: v }); setView('preview'); }} min={100} max={20000} />
+              <NumInput label="Yükseklik" value={region.height} onChange={(v) => { setRegion({ ...region, height: v }); setView('preview'); }} min={100} max={6000} />
+              <NumInput label="Derinlik" value={region.depth} onChange={(v) => { setRegion({ ...region, depth: v }); setView('preview'); }} min={100} max={1200} />
+              <NumInput label="En geniş modül" value={maxModule} onChange={(v) => { setMaxModule(Math.max(300, v)); setView('preview'); }} min={300} max={2400} />
+              <NumInput label="Üst kutu yüksekliği" value={topHeight} onChange={(v) => { setTopHeight(v); setView('preview'); }} max={1200}
+                hint="0 = ayrı üst kutu yok" />
+            </div>
+          </Section>
+  
+          <Section title="Sonuç" tour="shape-result">
+            <p className="text-sm">
+              <span className="font-semibold">{cabinetsN}</span> dolap
+              {shallowN > 0 && <span className="text-[var(--color-text-muted)]"> ({shallowN} sığ)</span>}
+              {fillersN > 0 && <> · <span className="font-semibold">{fillersN}</span> dolgu</>}
+              {fit.blocked.length > 0 && <span className="text-[var(--color-text-muted)]"> · {fit.blocked.length} boş bölge</span>}
+            </p>
+            <p className="text-[11px] text-[var(--color-text-dim)]">
+              Önler duvardan {region.depth} mm'de hizalanır. Çıkıntının önüne sığ dolap (mor), yer kalmayan yere dolgu paneli (turuncu) gelir; kirişin altında dolap kısalır, önünde sığ üst kutu oluşur. Pencere ve kapının önü boş kalır.
+            </p>
+            {fit.warnings.map((w) => <p key={w} className="text-[11px] text-[var(--color-warning)]">{w}</p>)}
+            {target && (
+              <div role="radiogroup" aria-label="Görünüm" className="flex rounded-md border border-[var(--color-border)] overflow-hidden">
+                {([['built', 'Kurulu dolap'], ['preview', 'Önizleme']] as const).map(([val, label]) => (
+                  <button key={val} role="radio" aria-checked={view === val} onClick={() => setView(val)}
+                    className={`flex-1 px-2 py-1 text-xs font-medium transition-colors ${view === val ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-muted)] hover:bg-[var(--color-bg-hover)]/60'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {target ? (
+              <>
+                <Button variant="primary" disabled={cabinetsN + fillersN === 0} onClick={() => build(true)}>
+                  <Hammer size={14} /> "{target.name}" dolabını yenile
+                </Button>
+                <p className="text-[11px] text-[var(--color-text-dim)] -mt-1">Yenileme, bu dolapta elle yaptığınız değişiklikleri siler.</p>
+                <Button size="sm" disabled={cabinetsN + fillersN === 0} onClick={() => build(false)}>Ayrı yeni dolap olarak ekle</Button>
+                <Button size="sm" variant="ghost" onClick={() => setActivePage('composer')}>
+                  <ExternalLink size={13} /> Dolap düzenine geç (raf, kapak)
+                </Button>
+              </>
+            ) : (
+              <Button variant="primary" disabled={cabinetsN + fillersN === 0} onClick={() => build(false)}>
+                <Hammer size={14} /> Dolabı oluştur
               </Button>
-              <p className="text-[11px] text-[var(--color-text-dim)] -mt-1">Yenileme, bu dolapta elle yaptığınız değişiklikleri siler.</p>
-              <Button size="sm" disabled={cabinetsN + fillersN === 0} onClick={() => build(false)}>Ayrı yeni dolap olarak ekle</Button>
-              <Button size="sm" variant="ghost" onClick={() => setActivePage('composer')}>
-                <ExternalLink size={13} /> Dolap düzenine geç (raf, kapak)
-              </Button>
+            )}
+          </Section>
             </>
-          ) : (
-            <Button variant="primary" disabled={cabinetsN + fillersN === 0} onClick={() => build(false)}>
-              <Hammer size={14} /> Dolabı oluştur
-            </Button>
-          )}
-        </Section>
+        )}
       </aside>
     </div>
   );

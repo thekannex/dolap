@@ -3,10 +3,9 @@ import type { Composition, JobKind, Project, Space, Wall, WallSurvey, Obstacle }
 import { applyBoxContent, boxContentLabel, checkSharing, detectBoxContent, COMPOSITION_TEMPLATES } from '../core/layout/composition';
 import type { BoxContent } from '../core/layout/composition';
 import { fitBoxContent, fitWall } from '../core/layout/wall-fit';
-import { legacyFieldsFromSurvey, wallRange, wallSignature } from '../core/layout/wall-survey';
+import { legacyFieldsFromSurvey, wallSignature } from '../core/layout/wall-survey';
 import type { FitBox } from '../core/layout/wall-fit';
 import type { CabinetType, ProjectCabinet } from '../core/models/cabinet';
-import type { PlannedModule } from '../core/layout/module-planner';
 import {
   applyTypePreset, createProjectCabinet, nextCabinetCode, rowForType, CABINET_TYPE_LABELS, DEFAULT_WIDTHS,
 } from '../core/engine/cabinet-factory';
@@ -14,6 +13,8 @@ import { createJobEntities, createProject, createWall, effectiveWallWidth, nextW
 import { nextJobName } from '../core/project/jobs';
 import { interiorFromCabinet } from '../core/engine/interior';
 import { kitchenMove, kitchenTypeForRect } from '../core/layout/kitchen-canvas';
+import { planKitchenWall, DEFAULT_KITCHEN_PLAN } from '../core/layout/kitchen-fit';
+import type { KitchenModule, KitchenPlanOptions } from '../core/layout/kitchen-fit';
 import type { CanvasRect } from '../core/layout/kitchen-canvas';
 import type { ProjectKind } from '../core/project/project-factory';
 
@@ -74,7 +75,10 @@ export interface ProjectStore {
   removeCabinet: (id: string) => void;
   duplicateCabinet: (id: string) => string | null;
   moveCabinet: (id: string, direction: -1 | 1) => void;
-  applyWallPlan: (wallId: string, modules: PlannedModule[], opts: { includeUpper: boolean; replace: boolean }) => number;
+  /** Duvar şekline uyan mutfak önerisini kurar; duvardaki mutfak dolapları silinip yenilenir. Kurulan dolap sayısını döndürür. */
+  applyKitchenPlan: (wallId: string, modules: KitchenModule[], opts: KitchenPlanOptions) => number;
+  /** Mutfak önerisini duvarın güncel şekline göre son ayarlarla yeniden kurar. */
+  refitKitchenWall: (wallId: string) => number;
   /** Mutfak duvarında dolabı sürükleyerek taşır / boyutlandırır (konumu boş dolaplar bugünkü yerine sabitlenir). */
   moveKitchenCabinet: (id: string, rect: CanvasRect) => void;
   /** Mutfak duvarına çizilen alana dolap ekler; türü konumundan seçilir (üst, boy ya da alt dolap). */
@@ -379,6 +383,40 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
       return { ...p, cabinets };
     }),
 
+    applyKitchenPlan: (wallId, modules, opts) => {
+      const { project } = get();
+      if (!project) return 0;
+      const jobId = jobOfWall(project, wallId);
+      const kept = project.cabinets.filter((c) => !(c.wallId === wallId && !c.groupId));
+      const added: ProjectCabinet[] = [];
+      for (const m of modules) {
+        const type: CabinetType = m.kind === 'filler' ? 'filler' : m.row === 'wall' ? 'wall' : 'base';
+        const cab = createProjectCabinet({
+          id: uid(), type, width: m.width, height: m.height, code: nextCabinetCode([...kept, ...added].map((c) => c.code)), wallId, x: m.x,
+        });
+        cab.jobId = jobId;
+        cab.row = m.row;
+        cab.depth = m.depth;
+        if (m.backOffset > 0) cab.backOffset = m.backOffset;
+        // Üst sıradaki dolap ve dolgular yerden yüksekliklerini taşır (kiriş altı, kirişin önü)
+        if (m.row === 'wall') cab.elevation = m.elevation;
+        added.push(cab);
+      }
+      const spaces = project.spaces.map((sp) => ({
+        ...sp,
+        walls: sp.walls.map((w) => (w.id === wallId ? { ...w, planSig: wallSignature(w), kitchenPlan: { widths: [...opts.widths], includeUpper: opts.includeUpper } } : w)),
+      }));
+      set({ project: { ...project, cabinets: [...kept, ...added], spaces }, activeCabinetId: added[0]?.id ?? get().activeCabinetId });
+      return added.length;
+    },
+
+    refitKitchenWall: (wallId) => {
+      const wall = get().project?.spaces.flatMap((s) => s.walls).find((w) => w.id === wallId);
+      if (!wall) return 0;
+      const opts = wall.kitchenPlan ?? DEFAULT_KITCHEN_PLAN;
+      return get().applyKitchenPlan(wallId, planKitchenWall(wall, opts).modules, opts);
+    },
+
     moveKitchenCabinet: (id, rect) => mutate((p) => {
       const cab = p.cabinets.find((c) => c.id === id);
       if (!cab?.wallId) return p;
@@ -411,37 +449,6 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
       cabinet.jobId = jobOfWall(project, wallId);
       set({ project: { ...project, cabinets: [...project.cabinets, cabinet] }, activeCabinetId: id });
       return id;
-    },
-
-    applyWallPlan: (wallId, modules, opts) => {
-      const { project } = get();
-      if (!project) return 0;
-      const wallObj = project.spaces.flatMap((x) => x.walls).find((w) => w.id === wallId);
-      // Yan duvar şakulsüz ya da açılıysa dolaplar kullanılabilir aralığın başından dizilir
-      const startX = wallObj ? wallRange(wallObj).x0 : 0;
-      let cabinets = opts.replace ? project.cabinets.filter((c) => c.wallId !== wallId) : [...project.cabinets];
-      const added: ProjectCabinet[] = [];
-      const codes = () => [...cabinets, ...added].map((c) => c.code);
-
-      const rows: Array<'base' | 'wall'> = opts.includeUpper ? ['base', 'wall'] : ['base'];
-      for (const row of rows) {
-        for (const m of modules) {
-          if (m.type === 'appliance') continue;
-          const type: CabinetType = m.type === 'filler' ? 'filler' : row === 'wall' ? 'wall' : 'base';
-          const cab = createProjectCabinet({ id: uid(), type, width: m.width, code: nextCabinetCode(codes()), wallId, x: Math.round((m.x + startX) * 10) / 10 });
-          cab.jobId = jobOfWall(project, wallId);
-          if (row === 'wall' && type === 'filler') {
-            cab.depth = 330;
-            cab.row = 'wall';
-          }
-          added.push(cab);
-        }
-      }
-      cabinets = [...cabinets, ...added];
-      // Hangi duvar ölçüsüyle yerleştirildiği saklanır; sonradan değişirse uyarı çıkar
-      const spaces = project.spaces.map((sp) => ({ ...sp, walls: sp.walls.map((w) => (w.id === wallId ? { ...w, planSig: wallSignature(w) } : w)) }));
-      set({ project: { ...project, cabinets, spaces }, activeCabinetId: added[0]?.id ?? get().activeCabinetId });
-      return added.length;
     },
 
     addComposition: (name) => {

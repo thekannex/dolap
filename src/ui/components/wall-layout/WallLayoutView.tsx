@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, Pencil, Trash2, MousePointerClick } from 'lucide-react';
+import { AlertTriangle, Pencil, Trash2, MousePointerClick, ArrowRight, ArrowUp } from 'lucide-react';
 import type { Wall } from '../../../core/models/project';
 import type { ProjectCabinet } from '../../../core/models/cabinet';
 import type { ComputedCabinet } from '../../../core/engine/compute-cabinet';
-import { placeWallCabinets, checkWallFit } from '../../../core/layout/wall-elevation';
+import { placeWallCabinets } from '../../../core/layout/wall-elevation';
+import { wallRange } from '../../../core/layout/wall-survey';
 import { kitchenCanvas, kitchenYLocked } from '../../../core/layout/kitchen-canvas';
 import type { CanvasRect } from '../../../core/layout/kitchen-canvas';
-import { boxesOverlap } from '../../../core/layout/composition';
+import { boxesOverlap, checkSharing, detectBoxContent } from '../../../core/layout/composition';
+import ContentPicker from '../shared/ContentPicker';
 import { wallHeightOf } from '../../../core/layout/wall-fit';
 import { CABINET_TYPE_LABELS } from '../../../core/engine/cabinet-factory';
 import { interiorFromCabinet } from '../../../core/engine/interior';
@@ -18,15 +20,18 @@ import InteriorEditor from '../interior/InteriorEditor';
 import type { CellRef } from '../interior/InteriorSvg';
 import BehindDoorControl from '../shared/BehindDoorControl';
 import JointControls from '../shared/JointControls';
-import { Button, NumInput, Section } from '../shared/ui';
-import { ON_LEGS, WITH_COUNTERTOP, COUNTERTOP_THICKNESS as COUNTERTOP } from '../../../core/layout/scene-layout';
+import { Button, NumInput, Section, Toggle } from '../shared/ui';
+import { ON_LEGS, WITH_COUNTERTOP, COUNTERTOP_THICKNESS as COUNTERTOP, KITCHEN_LEG_HEIGHT, UPPER_BOTTOM } from '../../../core/layout/scene-layout';
 
 /** Seçili mutfak dolabı: raf, kapak, bölme; ölçü ve konum; dikmeler. Duvar dolabının kutu paneliyle aynı araçlar. */
-function KitchenBoxPanel({ cab, box, onMove, selectedCell, onSelectCell }: {
-  cab: ProjectCabinet; box: ProjectCabinet; onMove: (rect: CanvasRect) => void;
+function KitchenBoxPanel({ cab, box, boxes, onMove, onAdd, selectedCell, onSelectCell }: {
+  cab: ProjectCabinet; box: ProjectCabinet; boxes: ProjectCabinet[]; onMove: (rect: CanvasRect) => void; onAdd: (rect: CanvasRect) => void;
   selectedCell: CellRef | null; onSelectCell: (ref: CellRef | null) => void;
 }) {
   const updateCabinet = useProjectStore((s) => s.updateCabinet);
+  const setBoxContent = useProjectStore((s) => s.setBoxContent);
+  const check = checkSharing(box, boxes);
+  const onLegs = cab.row !== 'wall' && ON_LEGS.has(cab.type) && cab.type !== 'filler';
   const removeCabinet = useProjectStore((s) => s.removeCabinet);
   const setActivePage = useUIStore((s) => s.setActivePage);
   const confirm = useUIStore((s) => s.confirm);
@@ -47,6 +52,14 @@ function KitchenBoxPanel({ cab, box, onMove, selectedCell, onSelectCell }: {
         <Section title="Raflar, kapaklar ve bölmeler">
           {/* Bölmesiz dolap da bölmeli gösterilir; ilk değişiklikte bölmeli kaydedilir */}
           <InteriorEditor cabinet={cab.interior ? cab : { ...cab, interior: interiorFromCabinet(cab) }} selected={selectedCell} onSelect={onSelectCell} />
+          <details className="rounded-md border border-[var(--color-border)]">
+            <summary className="px-2 py-1.5 text-xs cursor-pointer text-[var(--color-text-muted)]">Hızlı doldur (bölmeleri sıfırlar)</summary>
+            <div className="p-2"><ContentPicker value={detectBoxContent(cab)} onChange={(v) => {
+              setBoxContent(cab.id, v);
+              // Mutfak alt dolabının kuşakları (tezgâh altı) korunur
+              if (cab.railWidth) updateCabinet(cab.id, { railWidth: cab.railWidth });
+            }} /></div>
+          </details>
         </Section>
       )}
 
@@ -62,6 +75,12 @@ function KitchenBoxPanel({ cab, box, onMove, selectedCell, onSelectCell }: {
             ? <p className="text-[11px] text-[var(--color-text-dim)] self-end pb-1.5">Yerden {rect.y} mm (ayak / zemin)</p>
             : <NumInput label="Yerden" value={rect.y} onChange={(v) => onMove({ ...rect, y: v })} max={3000} />}
         </div>
+        {onLegs && (
+          <Toggle label="Ayak yerine baza" checked={cab.plinthHeight > 0}
+            onChange={(v) => updateCabinet(cab.id, v
+              ? { plinthHeight: KITCHEN_LEG_HEIGHT, legHeight: 0, height: cab.height + KITCHEN_LEG_HEIGHT }
+              : { plinthHeight: 0, height: Math.max(100, cab.height - cab.plinthHeight) })} />
+        )}
       </Section>
 
       <Section title="Dikmeler ve tablalar">
@@ -69,7 +88,29 @@ function KitchenBoxPanel({ cab, box, onMove, selectedCell, onSelectCell }: {
         <JointControls cabinet={cab} onChange={(patch) => updateCabinet(cab.id, patch)} />
       </Section>
 
-      <Button size="sm" variant="ghost" className="mt-3" onClick={() => setActivePage('editor')}><Pencil size={13} /> Dolap editöründe ayrıntılar (çekmece, evye…)</Button>
+      <Section title="Ortak panel">
+        <Toggle label={`Sol dikme ortak${check.left.neighbor ? ` (${check.left.neighbor} ile)` : ''}`}
+          checked={cab.shareLeft && check.left.possible} onChange={(v) => updateCabinet(cab.id, { shareLeft: v })} />
+        {!check.left.possible && <p className="text-[11px] text-[var(--color-text-dim)] -mt-2 pl-6">{check.left.reason}</p>}
+        {cab.row === 'wall' && (
+          <>
+            <Toggle label={`Alt tabla ortak${check.bottom.neighbor ? ` (${check.bottom.neighbor} ile)` : ''}`}
+              checked={cab.shareBottom && check.bottom.possible} onChange={(v) => updateCabinet(cab.id, { shareBottom: v })} />
+            {!check.bottom.possible && <p className="text-[11px] text-[var(--color-text-dim)] -mt-2 pl-6">{check.bottom.reason}</p>}
+          </>
+        )}
+        <p className="text-[11px] text-[var(--color-text-dim)]">Ortak panelde komşunun dikmesi ya da tablası kullanılır; bu dolabın o paneli kesim listesinden düşer.</p>
+      </Section>
+
+      <div className="flex flex-col gap-2 pt-3">
+        <div className="grid grid-cols-2 gap-2">
+          <Button size="sm" onClick={() => onAdd({ x: rect.x + rect.w, y: rect.y, w: Math.min(600, Math.max(300, rect.w)), h: rect.h })}><ArrowRight size={13} /> Sağına ekle</Button>
+          <Button size="sm" onClick={() => onAdd(cab.row === 'wall'
+            ? { x: rect.x, y: rect.y + rect.h, w: rect.w, h: 400 }
+            : { x: rect.x, y: UPPER_BOTTOM, w: rect.w, h: 720 })}><ArrowUp size={13} /> Üstüne ekle</Button>
+        </div>
+        <Button size="sm" variant="ghost" onClick={() => setActivePage('editor')}><Pencil size={13} /> Dolap editöründe ayrıntılar (çekmece, evye…)</Button>
+      </div>
     </div>
   );
 }
@@ -96,7 +137,6 @@ export default function WallLayoutView({ wall }: { wall: Wall }) {
 
   const cabinets = useMemo(() => (allCabinets ?? []).filter((c) => c.wallId === wall.id && !c.groupId), [allCabinets, wall.id]);
   const placements = useMemo(() => placeWallCabinets(cabinets), [cabinets]);
-  const fit = useMemo(() => checkWallFit(placements, wall.effectiveWidth), [placements, wall.effectiveWidth]);
   const wallH = wallHeightOf(wall);
   const { boxes, ghosts } = useMemo(() => kitchenCanvas(cabinets, wallH), [cabinets, wallH]);
   const computedById = useMemo(
@@ -116,6 +156,16 @@ export default function WallLayoutView({ wall }: { wall: Wall }) {
     return Math.round(Math.min(...centers.map((c) => Math.abs(c - w))));
   }, [wall.obstacles, computedById, placements]);
 
+  const fit = useMemo(() => {
+    const all = [...boxes.map((b) => ({ code: b.code, r: { x: b.x ?? 0, y: b.elevation ?? 0, w: b.width, h: b.height } })), ...ghosts.map((g) => ({ code: g.code, r: g }))];
+    const overlaps: Array<[string, string]> = [];
+    for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
+      if (boxesOverlap(all[i].r, all[j].r)) overlaps.push([all[i].code, all[j].code]);
+    }
+    const end = all.reduce((m, a) => Math.max(m, a.r.x + a.r.w), 0);
+    return { overflow: Math.max(0, Math.round(end - wallRange(wall).x1)), overlaps };
+  }, [boxes, ghosts, wall]);
+
   const selectedBox = boxes.find((b) => b.id === activeCabinetId) ?? null;
   const selectedCab = selectedBox ? cabinets.find((c) => c.id === selectedBox.id) ?? null : null;
   const selectedCell = selectedBox && cellSel?.boxId === selectedBox.id ? cellSel.ref : null;
@@ -125,6 +175,11 @@ export default function WallLayoutView({ wall }: { wall: Wall }) {
   const move = (id: string, r: CanvasRect) => {
     if (overlapsOthers(id, r)) { notify('error', 'Dolaplar üst üste binemez; eski yerine döndü.'); return; }
     moveKitchenCabinet(id, r);
+  };
+
+  const add = (r: CanvasRect) => {
+    if (overlapsOthers(null, r)) { notify('error', 'Orada yer yok; başka bir dolap var.'); return; }
+    addKitchenCabinetAt(wall.id, r);
   };
 
   return (
@@ -173,10 +228,7 @@ export default function WallLayoutView({ wall }: { wall: Wall }) {
                 )}
               </g>
             )}
-            onDraw={(r) => {
-              if (overlapsOthers(null, r)) { notify('error', 'Dolaplar üst üste binemez.'); return; }
-              addKitchenCabinetAt(wall.id, r);
-            }}
+            onDraw={add}
             onCommit={move}
             onDelete={async (id) => {
               const c = cabinets.find((x) => x.id === id);
@@ -198,7 +250,7 @@ export default function WallLayoutView({ wall }: { wall: Wall }) {
 
       <aside data-tour="wall-box-panel" className="w-80 shrink-0 h-full overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-bg-card)] p-4">
         {selectedCab && selectedBox ? (
-          <KitchenBoxPanel cab={selectedCab} box={selectedBox} onMove={(r) => move(selectedCab.id, r)}
+          <KitchenBoxPanel cab={selectedCab} box={selectedBox} boxes={boxes} onMove={(r) => move(selectedCab.id, r)} onAdd={add}
             selectedCell={selectedCell} onSelectCell={(ref) => setCellSel(ref ? { boxId: selectedCab.id, ref } : null)} />
         ) : (
           <div className="flex flex-col items-center text-center gap-2 pt-10 text-sm text-[var(--color-text-muted)]">

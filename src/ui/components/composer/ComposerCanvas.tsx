@@ -394,7 +394,7 @@ export default function ComposerCanvas({
         const geo = interior ? layoutInterior(interior, frameFor(b, r)) : null;
         const selCell = sel && selectedCell ? selectedCell : null;
         const interactive = sel && !draft;
-        const lockedLabel = geo ? 'Bölmeli' : boxContentLabel(content);
+        const lockedLabel = b.type === 'filler' ? 'Dolgu' : geo ? 'Bölmeli' : boxContentLabel(content);
         const label = Math.min(fs * 1.1, r.w / 7, r.h / 3.2);
         return (
           <g key={b.id} opacity={draft ? 0.85 : 1}>

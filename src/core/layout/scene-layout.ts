@@ -88,7 +88,7 @@ export function layoutScene(project: Pick<Project, 'spaces' | 'cabinets'> & Part
       width: cab.width,
       height: cab.height,
       depth: cab.depth,
-      back: 0,
+      back: cab.backOffset ?? 0,
       countertop: WITH_COUNTERTOP.has(cab.type) && cab.row !== 'wall',
     });
   };

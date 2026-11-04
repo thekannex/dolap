@@ -8,5 +8,5 @@ import { compositionComputeOptions } from '../../../core/layout/composition';
 /** Kutunun iç düzen çerçevesi; kompozisyonda ortak paneller hesaba katılır. */
 export function useInteriorFrame(cab: ProjectCabinet): InteriorFrame {
   const all = useProjectStore((s) => s.project?.cabinets);
-  return useMemo(() => interiorFrameOf(cab, cab.groupId && all ? compositionComputeOptions(cab, all) : {}), [cab, all]);
+  return useMemo(() => interiorFrameOf(cab, all ? compositionComputeOptions(cab, all) : {}), [cab, all]);
 }

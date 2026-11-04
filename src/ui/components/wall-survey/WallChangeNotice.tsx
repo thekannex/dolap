@@ -15,6 +15,7 @@ export default function WallChangeNotice({ wall }: { wall: Wall }) {
   const acknowledgeWallChange = useProjectStore((s) => s.acknowledgeWallChange);
   const acknowledgeFitChange = useProjectStore((s) => s.acknowledgeFitChange);
   const refitComposition = useProjectStore((s) => s.refitComposition);
+  const refitKitchenWall = useProjectStore((s) => s.refitKitchenWall);
   const activePage = useUIStore((s) => s.activePage);
   const setActivePage = useUIStore((s) => s.setActivePage);
   const confirm = useUIStore((s) => s.confirm);
@@ -39,11 +40,16 @@ export default function WallChangeNotice({ wall }: { wall: Wall }) {
             </ul>
           )}
           <p className="text-xs text-[var(--color-text-muted)] pl-6">
-            Yerleşim adımında "Öneriyi uygula" ile dolapları yeni duruma göre yeniden dizebilir ya da dolapları tek tek düzeltebilirsiniz.
+            Yerleşimi duvarın güncel ölçü ve engellerine göre yeniden hesaplayabilir (son kullandığınız genişliklerle) ya da dolapları çizimde tek tek düzeltebilirsiniz.
           </p>
           <div className="flex gap-2 pl-6">
+            <Button size="sm" variant="primary" onClick={async () => {
+              if (!(await confirm({ title: 'Yerleşim yeniden hesaplansın mı?', message: `${wall.name} üzerindeki mutfak dolapları duvarın güncel şekline göre yeniden kurulacak; dolaplarda elle yaptığınız değişiklikler silinir.`, confirmLabel: 'Yeniden hesapla', danger: true }))) return;
+              const n = refitKitchenWall(wall.id);
+              notify('success', `Yerleşim yeniden hesaplandı (${n} dolap/dolgu).`);
+            }}><RefreshCw size={13} /> Yerleşimi yeniden hesapla</Button>
             {activePage !== 'wall-layout' && (
-              <Button size="sm" variant="primary" onClick={() => setActivePage('wall-layout')}>Yerleşim adımına git <ArrowRight size={13} /></Button>
+              <Button size="sm" onClick={() => setActivePage('wall-layout')}>Yerleşim adımına git <ArrowRight size={13} /></Button>
             )}
             {kitchen.changed && (
               <Button size="sm" onClick={() => acknowledgeWallChange(wall.id)}><Check size={13} /> Dolaplar böyle kalsın</Button>
