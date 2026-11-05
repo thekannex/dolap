@@ -19,8 +19,9 @@ export default function WallPlanPanel({ wall }: { wall: Wall }) {
   const notify = useUIStore((s) => s.notify);
   const [widths, setWidths] = useState<number[]>(wall.kitchenPlan?.widths ?? DEFAULT_KITCHEN_PLAN.widths);
   const [includeUpper, setIncludeUpper] = useState(wall.kitchenPlan?.includeUpper ?? DEFAULT_KITCHEN_PLAN.includeUpper);
+  const [absorbFiller, setAbsorbFiller] = useState(wall.kitchenPlan?.absorbFiller ?? true);
 
-  const plan = useMemo(() => planKitchenWall(wall, { widths, includeUpper }), [wall, widths, includeUpper]);
+  const plan = useMemo(() => planKitchenWall(wall, { widths, includeUpper, absorbFiller }), [wall, widths, includeUpper, absorbFiller]);
   const cabinets = plan.modules.filter((m) => m.kind === 'cabinet');
   const shallow = cabinets.filter((m) => m.backOffset > 0).length;
   const shortUpper = cabinets.filter((m) => m.row === 'wall' && m.height < 720).length;
@@ -37,7 +38,7 @@ export default function WallPlanPanel({ wall }: { wall: Wall }) {
       });
       if (!ok) return;
     }
-    const n = applyKitchenPlan(wall.id, plan.modules, { widths, includeUpper });
+    const n = applyKitchenPlan(wall.id, plan.modules, { widths, includeUpper, absorbFiller });
     notify('success', `${n} dolap/dolgu eklendi. Çizimde sürükleyerek ya da sağdaki panelden düzenleyebilirsiniz.`);
   };
 
@@ -81,6 +82,12 @@ export default function WallPlanPanel({ wall }: { wall: Wall }) {
       {plan.warnings.map((w) => <p key={w} className="text-[11px] text-[var(--color-warning)]">{w}</p>)}
 
       <Toggle label="Üst dolapları da ekle" checked={includeUpper} onChange={setIncludeUpper} />
+      <Toggle label="Artan payı dolaplara dağıt" checked={absorbFiller} onChange={setAbsorbFiller} />
+      <p className="text-[11px] text-[var(--color-text-dim)] -mt-2 pl-6">
+        {absorbFiller
+          ? 'Standart genişliklerle dolmayan pay kenardaki dolaba eklenir; dolap duvara ya da kolona tam dayanır.'
+          : 'Artan pay dolgu paneli olur (kapak duvara ya da kolona çarpmasın diye).'}
+      </p>
       <Button variant="primary" onClick={apply} disabled={widths.length === 0 || cabinets.length === 0}>
         <Wand2 size={15} /> Öneriyi uygula
       </Button>

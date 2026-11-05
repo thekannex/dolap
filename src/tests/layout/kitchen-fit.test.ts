@@ -56,6 +56,31 @@ describe('duvar şekline uyan mutfak önerisi', () => {
     expect(row(p, 'wall')).toEqual([]);
   });
 
+  it('artan pay kenardaki dolaba eklenir: kolon ve duvar dibinde dolgu şeridi kalmaz', () => {
+    const w = { ...wall([ob('column', 1298, 0, 400, 2500, 300)]), effectiveWidth: 2995 };
+    const p = planKitchenWall(w, { widths: [300, 400, 450, 500, 600], includeUpper: false });
+    const left = row(p, 'base').filter((m) => m.x < 1298);
+    expect(left.every((m) => m.kind === 'cabinet')).toBe(true);
+    expect(left.reduce((s, m) => s + m.width, 0)).toBe(1298);
+    const last = left[left.length - 1];
+    expect(last.x + last.width).toBe(1298);
+    expect(row(p, 'base').some((m) => m.kind === 'filler')).toBe(false);
+    expect(p.totalFiller).toBe(0);
+  });
+
+  it('standart dolabın sığmadığı dar aralık dolgu yerine o ende tek dolap olur', () => {
+    const p = planKitchenWall(wall([ob('window', 0, 900, 1000, 1200), ob('column', 1298, 0, 400, 2500, 300)]), { widths: [300, 400, 600], includeUpper: true });
+    const gap = row(p, 'wall').find((m) => m.x === 1000)!;
+    expect(gap).toMatchObject({ kind: 'cabinet', width: 298 });
+  });
+
+  it('seçenek kapalıysa artan pay dolgu paneli olur', () => {
+    const w = { ...wall([ob('column', 1298, 0, 400, 2500, 300)]), effectiveWidth: 2995 };
+    const p = planKitchenWall(w, { widths: [300, 400, 450, 500, 600], includeUpper: false, absorbFiller: false });
+    const fillers = row(p, 'base').filter((m) => m.kind === 'filler');
+    expect(fillers.map((m) => m.width)).toEqual([48, 47]);
+  });
+
   it('genişlik seçilmezse uyarır', () => {
     expect(planKitchenWall(wall(), { widths: [], includeUpper: true }).warnings[0]).toMatch(/genişliği/);
   });

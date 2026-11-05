@@ -65,7 +65,7 @@ export interface Wall {
   /** Otomatik yerleşim uygulandığında duvarın ölçü izi (sonradan değişti mi anlamak için). */
   planSig?: string | null;
   /** Son uygulanan mutfak önerisinin ayarları (genişlikler, üst sıra); yeniden hesaplamada kullanılır. */
-  kitchenPlan?: { widths: number[]; includeUpper: boolean } | null;
+  kitchenPlan?: { widths: number[]; includeUpper: boolean; absorbFiller?: boolean } | null;
   /** Sol ve sağ yan duvardaki engeller (kolon, boru, kasa…); köşeye yakınsa dolabı etkiler. */
   sideObstacles?: SideObstacle[];
 }

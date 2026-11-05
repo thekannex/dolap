@@ -404,7 +404,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => {
       }
       const spaces = project.spaces.map((sp) => ({
         ...sp,
-        walls: sp.walls.map((w) => (w.id === wallId ? { ...w, planSig: wallSignature(w), kitchenPlan: { widths: [...opts.widths], includeUpper: opts.includeUpper } } : w)),
+        walls: sp.walls.map((w) => (w.id === wallId ? { ...w, planSig: wallSignature(w), kitchenPlan: { widths: [...opts.widths], includeUpper: opts.includeUpper, absorbFiller: opts.absorbFiller ?? true } } : w)),
       }));
       set({ project: { ...project, cabinets: [...kept, ...added], spaces }, activeCabinetId: added[0]?.id ?? get().activeCabinetId });
       return added.length;
