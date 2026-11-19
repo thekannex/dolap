@@ -4,6 +4,7 @@ import {
   splitColumn, removeColumn, splitCell, removeCell, setColumnWidth, setCellHeight, moveDivider, movePartition,
   moveShelf, updateCell, setShelfCount, interiorFromCabinet, cellLabel, cellContentLabel, equalizeColumns, equalizeCells,
   groupColumns, ungroupColumns, setDividerBehind, equalizeColumnSubset, groupRange, moveColumn, nestColumn, columnUnits, setGroupWidth, equalizeGroup,
+  shelfSpaces, setInnerDrawer, innerDrawerSpacers,
 } from '../../core/engine/interior';
 import type { InteriorFrame } from '../../core/engine/interior';
 import { computeCabinet } from '../../core/engine/compute-cabinet';
@@ -383,5 +384,106 @@ describe('kapağın arkasındaki dikmeler', () => {
   it('son bölmenin sağında ara dikme yok', () => {
     const r = setDividerBehind(1, 'left')(twoCols(), frame());
     expect(r.columns.some((c) => c.dividerBehind)).toBe(false);
+  });
+});
+
+describe('kapağın içindeki çekmece', () => {
+  const oneDoor = (patch: Parameters<typeof newCell>[1] = {}): CabinetInterior => ({ columns: [newColumn([newCell('door', { shelves: [250, 500], ...patch })])] });
+
+  it('raf araları alttan üste', () => {
+    expect(shelfSpaces([500, 300], 764, 18)).toEqual([{ y: 0, h: 300 }, { y: 318, h: 182 }, { y: 518, h: 246 }]);
+    expect(shelfSpaces([], 764, 18)).toEqual([{ y: 0, h: 764 }]);
+  });
+
+  it('seçilen raf arasında kutu; dolgu yalnız menteşe tarafında', () => {
+    const g = layoutInterior(oneDoor({ innerDrawers: [0] }), frame());
+    expect(g.innerDrawers).toEqual([{
+      col: 0, cell: 0, index: 0, space: { x: 18, y: 18, w: 964, h: 250 }, box: { x: 36, y: 33, w: 946, h: 210 },
+      spacers: { left: 18, right: 0, layers: 1 },
+    }]);
+    // Sağ menteşede dolgu sağda
+    expect(layoutInterior(oneDoor({ innerDrawers: [0], hinge: 'right' }), frame()).innerDrawers[0].box).toMatchObject({ x: 18, w: 946 });
+    // Kapak yine kapak; çekmece önü eklenmez
+    expect(g.fronts.every((f) => f.kind === 'door')).toBe(true);
+  });
+
+  it('alçak raf arasında uyarı verir, kutu çıkmaz', () => {
+    const g = layoutInterior({ columns: [newColumn([newCell('door', { shelves: [80], innerDrawers: [0] })])] }, frame());
+    expect(g.innerDrawers).toEqual([]);
+    expect(g.warnings.some((w) => w.ruleId === 'VAL_INNER_DRAWER_LOW')).toBe(true);
+  });
+
+  it('aç / kapat ve raf sayısı azalınca artık olmayan çekmece kalkar', () => {
+    let it = setInnerDrawer(0, 0, 2, true)(oneDoor({ innerDrawers: [0] }), frame());
+    expect(it.columns[0].cells[0].innerDrawers).toEqual([0, 2]);
+    it = setShelfCount(0, 0, 1)(it, frame());
+    expect(it.columns[0].cells[0].innerDrawers).toEqual([0]);
+    it = setInnerDrawer(0, 0, 0, false)(it, frame());
+    expect(it.columns[0].cells[0].innerDrawers).toEqual([]);
+  });
+
+  it('kesim listesi: kutu, taban, ray takozu ve ray', () => {
+    const r = computeCabinet({ ...DEFAULT_CABINET, type: 'custom', width: 1000, height: 800, depth: 400, railWidth: 0, interior: oneDoor({ innerDrawers: [0, 1] }) });
+    const byId = (id: string) => r.parts.find((p) => p.id === id);
+    expect(byId('inner-side-1A-1')).toMatchObject({ width: 210, quantity: 2 });
+    expect(byId('inner-side-1A-2')).toMatchObject({ width: 192, quantity: 2 });
+    expect(byId('inner-fb-1A-1')).toMatchObject({ length: 884.5, quantity: 2 });
+    expect(byId('inner-bottom-1A-1')).toMatchObject({ length: 920.5, quantity: 1 });
+    expect(byId('inner-spacer-1A-1')).toMatchObject({ width: 60, quantity: 1, name: 'İç Çekmece 1A-1 Ray Takozu (menteşe tarafı)' });
+    const rails = r.hardware.filter((h) => h.key === 'rail').reduce((s, h) => s + h.quantity, 0);
+    expect(rails).toBe(2);
+    expect(r.parts.some((p) => p.id.startsWith('drawer-front'))).toBe(false);
+  });
+});
+
+describe('iç çekmece ile kapak ve menteşe', () => {
+  const base = (cell: Parameters<typeof newCell>[1], patch: Partial<CabinetState> = {}) => computeCabinet({
+    ...DEFAULT_CABINET, type: 'custom', width: 600, height: 720, depth: 560, railWidth: 0,
+    interior: { columns: [newColumn([newCell('door', cell)])] }, ...patch,
+  });
+
+  it('alttaki çekmecenin takozuna denk gelen menteşe yukarı alınır ve bildirilir', () => {
+    const r = base({ shelves: [220, 450], innerDrawers: [0] });
+    const moved = r.warnings.find((w) => w.ruleId === 'INFO_HINGE_MOVED_INNER_DRAWER');
+    expect(moved?.message).toMatch(/kapağın altından \d+, \d+ mm/);
+    expect(r.warnings.some((w) => w.ruleId === 'INFO_INNER_DRAWER_DOOR')).toBe(true);
+    expect(r.warnings.some((w) => w.ruleId === 'VAL_HINGE_INNER_DRAWER')).toBe(false);
+  });
+
+  it('ortadaki raf arasında menteşe yerinde kalır', () => {
+    const r = base({ shelves: [220, 450], innerDrawers: [1] });
+    expect(r.warnings.some((w) => w.ruleId === 'INFO_HINGE_MOVED_INNER_DRAWER')).toBe(false);
+  });
+
+  it('kutu kapalı kapağa sürtmez: ray, iç derinlikten pay bırakılarak seçilir', () => {
+    for (const depth of [505, 560, 600]) {
+      const inner = base({ shelves: [220], innerDrawers: [1] }, { depth });
+      const rail = inner.parts.find((p) => p.id.startsWith('inner-side'))!.length;
+      const plain = computeCabinet({ ...DEFAULT_CABINET, type: 'custom', width: 600, height: 720, depth, railWidth: 0, interior: { columns: [newColumn([newCell('drawer')])] } });
+      const plainRail = plain.parts.find((p) => p.id.startsWith('drawer-side'))!.length;
+      expect(rail).toBeLessThanOrEqual(plainRail);
+    }
+  });
+});
+
+describe('iç çekmece dolgusu kendiliğinden', () => {
+  it('bindirme kapakta menteşe tarafına tek kat, gömmede iki kat, çift kapakta iki yana', () => {
+    expect(innerDrawerSpacers({ opening: 'side', doorCount: 1, hinge: 'left' }, { t: 18, inset: false, doorGap: 3 })).toEqual({ left: 18, right: 0, layers: 1 });
+    expect(innerDrawerSpacers({ opening: 'side', doorCount: 1, hinge: 'right' }, { t: 18, inset: true, doorGap: 3 })).toEqual({ left: 0, right: 36, layers: 2 });
+    expect(innerDrawerSpacers({ opening: 'side', doorCount: 2, hinge: 'left' }, { t: 18, inset: false, doorGap: 3 })).toEqual({ left: 18, right: 18, layers: 1 });
+    expect(innerDrawerSpacers({ opening: 'up', doorCount: 1, hinge: 'left' }, { t: 18, inset: false, doorGap: 3 })).toEqual({ left: 0, right: 0, layers: 0 });
+  });
+
+  it('yukarı açılan kapakta takoz parçası çıkmaz, kutu gözü doldurur', () => {
+    const r = computeCabinet({ ...DEFAULT_CABINET, type: 'custom', width: 600, height: 720, depth: 560, railWidth: 0,
+      interior: { columns: [newColumn([newCell('door', { opening: 'up', shelves: [300], innerDrawers: [0] })])] } });
+    expect(r.parts.some((p) => p.id.startsWith('inner-spacer'))).toBe(false);
+    expect(r.parts.find((p) => p.id.startsWith('inner-bottom'))!.length).toBe(538.5); // 564 - 25.4
+  });
+
+  it('gömme kapakta dolgu iki kat ve kesim listesinde', () => {
+    const r = computeCabinet({ ...DEFAULT_CABINET, type: 'custom', width: 600, height: 720, depth: 560, railWidth: 0, doorOverlayType: 'inset',
+      interior: { columns: [newColumn([newCell('door', { shelves: [300], innerDrawers: [1] })])] } });
+    expect(r.parts.find((p) => p.id.startsWith('inner-spacer'))).toMatchObject({ quantity: 2 });
   });
 });

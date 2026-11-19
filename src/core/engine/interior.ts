@@ -48,12 +48,41 @@ export interface InteriorGeometry {
   shelves: Array<{ col: number; cell: number; index: number; rect: IRect; fixed: boolean }>;
   fronts: FrontGeometry[];
   rods: Array<{ col: number; cell: number; y: number; x1: number; x2: number }>;
+  /** Kapağın içindeki çekmeceler: raf arası (space) ve çekmece kutusunun önden görünüşü (box). */
+  innerDrawers: Array<{ col: number; cell: number; index: number; space: IRect; box: IRect; spacers: InnerDrawerSpacers }>;
   /** Eşit tutulan bölme grupları (ölçü parantezi için). */
   groups: Array<{ id: string; first: number; last: number; x: number; w: number }>;
   warnings: ValidationWarning[];
 }
 
 export const MIN_COLUMN = 80;
+/** İç çekmece: kutu en fazla bu yükseklikte, raf arasından bu kadar alçak; ray için alttan boşluk. */
+export const INNER_DRAWER = {
+  maxBoxHeight: 250, clearance: 40, railGap: 15, minBoxHeight: 60, spacerHeight: 60, spacerBelowBox: 10,
+  /** Menteşe kolu ve plakasının yan dikmeden içeri taşması (Ø35 kap menteşe). */
+  hingeProtrusion: 15,
+  /** Bindirme kapağın açıkken gözün içine girmesi; gömme kapakta kapak kalınlığı + derz. */
+  overlayIntrusion: 2,
+  /** Rayın bir yandaki payı (standart ray düşümünün yarısı) ve güvenlik payı. */
+  railSide: 12.7, margin: 3,
+} as const;
+
+/** İç çekmecenin menteşe tarafındaki dolgu (ray takozu): her yanın kalınlığı ve kaç kat gövde levhası. */
+export interface InnerDrawerSpacers { left: number; right: number; layers: number }
+
+/**
+ * Dolgu yalnız menteşe tarafına (çift kapakta iki yana) konur; kalınlığı menteşe taşması ve açık kapağın
+ * içeri girmesi kadar, ray payı düşülerek, gövde kalınlığının katı olarak seçilir. Yukarı açılan kapakta gerekmez.
+ */
+export function innerDrawerSpacers(cell: Pick<InteriorCell, 'opening' | 'doorCount' | 'hinge'>, f: Pick<InteriorFrame, 't' | 'inset' | 'doorGap'>): InnerDrawerSpacers {
+  if (cell.opening === 'up') return { left: 0, right: 0, layers: 0 };
+  const intrusion = f.inset ? f.t + f.doorGap : INNER_DRAWER.overlayIntrusion;
+  const need = INNER_DRAWER.hingeProtrusion + intrusion + INNER_DRAWER.margin - INNER_DRAWER.railSide;
+  const layers = need <= 0 ? 0 : Math.ceil(need / f.t);
+  const th = layers * f.t;
+  const both = cell.doorCount === 2;
+  return { left: both || cell.hinge === 'left' ? th : 0, right: both || cell.hinge === 'right' ? th : 0, layers };
+}
 export const MIN_CELL = 60;
 
 let idSeq = 0;
@@ -172,6 +201,22 @@ export function resolveInterior(interior: CabinetInterior, f: InteriorFrame): Ca
   };
 }
 
+/** Gözün raf araları alttan üste: y göz tabanından, h açık yükseklik (raf kalınlıkları düşülmüş). */
+export function shelfSpaces(shelves: number[], h: number, t: number): Array<{ y: number; h: number }> {
+  const sorted = shelves.filter((p) => p > 0 && p < h - t).sort((a, b) => a - b);
+  const out: Array<{ y: number; h: number }> = [];
+  let start = 0;
+  for (const p of sorted) {
+    out.push({ y: start, h: p - start });
+    start = p + t;
+  }
+  out.push({ y: start, h: h - start });
+  return out;
+}
+
+/** İç çekmece kutusunun yüksekliği: raf arasından ray payı kadar alçak, en fazla 250mm. */
+export const innerDrawerBoxHeight = (spaceHeight: number) => Math.min(INNER_DRAWER.maxBoxHeight, roundDown05(spaceHeight - INNER_DRAWER.clearance));
+
 /** Bir hücreye eşit aralıklı raf yerleşimi. */
 export function distributeShelves(cellHeight: number, count: number, t: number): number[] {
   if (count <= 0) return [];
@@ -183,7 +228,7 @@ export function layoutInterior(interior: CabinetInterior, f: InteriorFrame, code
   const r = resolveInterior(interior, f);
   const inner = innerBox(f);
   const { t, doorGap: g } = f;
-  const geo: InteriorGeometry = { inner, columns: [], dividers: [], partitions: [], cells: [], shelves: [], fronts: [], rods: [], groups: [], warnings: [] };
+  const geo: InteriorGeometry = { inner, columns: [], dividers: [], partitions: [], cells: [], shelves: [], fronts: [], rods: [], innerDrawers: [], groups: [], warnings: [] };
   const n = r.columns.length;
 
   let cx = inner.x;
@@ -222,6 +267,30 @@ export function layoutInterior(interior: CabinetInterior, f: InteriorFrame, code
           .forEach((p, k) => {
             geo.shelves.push({ col: ci, cell: cj, index: k, fixed, rect: { x: cx + (fixed ? 0 : 1), y: cy + p, w: w - (fixed ? 0 : 2), h: t } });
           });
+      }
+      // Kapağın içindeki çekmeceler: seçilen raf aralarında, menteşe takozlarının arasında
+      if (cell.content === 'door' && cell.innerDrawers?.length) {
+        const spaces = shelfSpaces(cell.shelves, h, t);
+        for (const k of [...new Set(cell.innerDrawers)].sort((a, b) => a - b)) {
+          const sp = spaces[k];
+          if (!sp) continue;
+          const boxH = innerDrawerBoxHeight(sp.h);
+          if (boxH < INNER_DRAWER.minBoxHeight) {
+            geo.warnings.push({
+              id: `${code}-inner-low-${ci}-${cj}-${k}`, severity: 'warning', ruleId: 'VAL_INNER_DRAWER_LOW',
+              message: `${cellLabel(ci, cj)}: ${k + 1}. raf arası (${sp.h}mm) iç çekmece için çok alçak.`,
+              suggestion: 'Rafları açın ya da çekmeceyi başka raf arasına alın.',
+            });
+            continue;
+          }
+          const spacers = innerDrawerSpacers(cell, f);
+          geo.innerDrawers.push({
+            col: ci, cell: cj, index: k,
+            space: { x: cx, y: cy + sp.y, w, h: sp.h },
+            box: { x: cx + spacers.left, y: cy + sp.y + INNER_DRAWER.railGap, w: Math.max(0, w - spacers.left - spacers.right), h: boxH },
+            spacers,
+          });
+        }
       }
       if (cell.rod && cell.content !== 'drawer') {
         const topShelf = Math.max(0, ...cell.shelves.filter((p) => p < h - t));
@@ -588,11 +657,22 @@ export const updateCell = (ci: number, cj: number, patch: Partial<InteriorCell>)
   return mapCol(r, ci, (col) => ({ ...col, cells: col.cells.map((c, j) => (j === cj ? { ...c, ...patch } : c)) }));
 };
 
-/** Gözdeki raf sayısını eşit aralıkla ayarlar. */
+/** Gözdeki raf sayısını eşit aralıkla ayarlar; artık olmayan raf aralarındaki iç çekmeceler kalkar. */
 export const setShelfCount = (ci: number, cj: number, count: number): Op => (it, f) => {
   const r = resolveInterior(it, f);
   const cell = r.columns[ci].cells[cj];
-  return updateCell(ci, cj, { shelves: distributeShelves(cell.height, Math.max(0, Math.floor(count)), f.t) })(r, f);
+  const n = Math.max(0, Math.floor(count));
+  const patch: Partial<InteriorCell> = { shelves: distributeShelves(cell.height, n, f.t) };
+  if (cell.innerDrawers?.length) patch.innerDrawers = cell.innerDrawers.filter((k) => k <= n);
+  return updateCell(ci, cj, patch)(r, f);
+};
+
+/** Kapaklı gözün bir raf arasına iç çekmece koyar ya da kaldırır. */
+export const setInnerDrawer = (ci: number, cj: number, space: number, on: boolean): Op => (it, f) => {
+  const r = resolveInterior(it, f);
+  const cur = r.columns[ci].cells[cj].innerDrawers ?? [];
+  const next = on ? [...new Set([...cur, space])].sort((a, b) => a - b) : cur.filter((k) => k !== space);
+  return updateCell(ci, cj, { innerDrawers: next })(r, f);
 };
 
 /** Bir rafı göz tabanından y yüksekliğine taşır (komşu raflarla çakışmadan). */

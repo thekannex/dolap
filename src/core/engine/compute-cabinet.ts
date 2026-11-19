@@ -11,11 +11,11 @@ import {
   calcInsetDoorWidth, calcInsetDoorHeight, suggestDoorCount,
 } from './door-calc';
 import { calcAdjustableShelf, calcFixedShelf } from './shelf-calc';
-import { calcHingeCount, calcHingePositions } from './hinge-calc';
+import { calcHingeCount, calcHingePositions, placeHingesClear } from './hinge-calc';
 import { calcDrawerBoxWidth, calcBestRailLength, calcDrawerFronts, calcDrawerBoxHeight } from './drawer-calc';
 import { validateShelfDeflection, validateSheetSize } from './validation';
 import { computeSinkLayout } from './sink';
-import { layoutInterior, cellLabel } from './interior';
+import { layoutInterior, cellLabel, INNER_DRAWER } from './interior';
 import type { InteriorGeometry } from './interior';
 import type { SinkLayout } from './sink';
 import { COUNTERTOP_OVERHANG } from '../layout/scene-layout';
@@ -787,6 +787,54 @@ function interiorParts(
       parts.push({ id: `drawer-fb-${label}`, code: `${cab.code}-CK${label}-ONARKA`, name: `Çekmece ${label} Ön/Arka`, group: 'drawer', material: 'body', length: r(boxW - 2 * t), width: boxH, thickness: t, quantity: 2 * n, bands: topBand, trace: trace('kutu genişliği - 2t', { boxW, t }, 'RULE_DRAWER_BOX_WIDTH', 'Kutu genişliği = göz genişliği − ray düşümü.') });
       parts.push({ id: `drawer-bottom-${label}`, code: `${cab.code}-CK${label}-TABAN`, name: `Çekmece ${label} Tabanı`, group: 'drawer', material: 'back', length: boxW, width: railLen, thickness: cab.backThickness, quantity: n, bands: NO_BANDS, trace: trace('kutu genişliği × ray boyu', { boxW, railLen }, 'RULE_DRAWER_BOTTOM', 'Çekmece tabanı kutunun altına çakılır.') });
       addHw({ key: 'rail', name: `${cab.railType === 'undermount' ? 'Gizli Ray' : 'Bilyalı Ray'} ${railLen}mm`, unit: 'çift', quantity: n, catalogVerified: false });
+    }
+  }
+
+  // Kapağın içindeki çekmeceler: aynı gözde eş yükseklikteki kutular tek satırda
+  if (geo.innerDrawers.length > 0) {
+    // Kapak kapanınca kutuya sürtmesin: gömme kapakta kapak kalınlığı + 2mm, bindirmede 5mm geride
+    const setback = insetFronts ? t + 2 : 5;
+    const innerRail = calcBestRailLength(iD - setback, STANDARD_RAIL_LENGTHS).value;
+    const topBand = { ...NO_BANDS, top: bodyBand };
+    for (const cell of geo.cells) {
+      const inCell = geo.innerDrawers.filter((d) => d.col === cell.col && d.cell === cell.cell);
+      if (inCell.length === 0) continue;
+      const cl = cellLabel(cell.col, cell.cell);
+      if (innerRail === 0) {
+        warnings.push({ id: `${cab.code}-inner-rail-${cl}`, severity: 'error', ruleId: 'VAL_RAIL_DEPTH', message: `${cl}: iç derinlik ${iD}mm; iç çekmece için standart ray sığmıyor.`, suggestion: 'Dolabı derinleştirin.' });
+        continue;
+      }
+      // Menteşe plakası ray takozuyla aynı yüksekliğe gelmesin: menteşeler takoz bantlarının dışına kaydırılır
+      const bands = inCell.map((d) => [d.box.y - INNER_DRAWER.spacerBelowBox, d.box.y - INNER_DRAWER.spacerBelowBox + INNER_DRAWER.spacerHeight] as [number, number]);
+      for (const fr of geo.fronts.filter((x) => x.col === cell.col && x.cell === cell.cell && x.kind === 'door' && x.opening === 'side')) {
+        const count = calcHingeCount(fr.rect.h, fr.rect.w, HINGE_COUNT_TABLE, 600).value;
+        const placed = placeHingesClear(fr.rect.h, count, bands.map(([a, b]) => [a - fr.rect.y, b - fr.rect.y] as [number, number]));
+        const door = geo.fronts.filter((x) => x.col === cell.col && x.cell === cell.cell).length > 1 ? `${cl} ${fr.index + 1}. kapak` : `${cl} kapağı`;
+        if (!placed.ok) {
+          warnings.push({ id: `${cab.code}-hinge-inner-${cl}-${fr.index}`, severity: 'warning', ruleId: 'VAL_HINGE_INNER_DRAWER', message: `${door}: menteşe iç çekmecenin ray takozuyla aynı yüksekliğe geliyor ve kaydıracak yer yok.`, suggestion: 'Çekmeceyi başka raf arasına alın ya da rafları kaydırın.' });
+        } else if (placed.moved) {
+          warnings.push({ id: `${cab.code}-hinge-moved-${cl}-${fr.index}`, severity: 'info', ruleId: 'INFO_HINGE_MOVED_INNER_DRAWER', message: `${door}: menteşeler iç çekmece ray takozuna denk gelmesin diye kapağın altından ${placed.positions.map((p) => Math.round(p)).join(', ')} mm'ye alındı.` });
+        }
+      }
+      warnings.push({ id: `${cab.code}-inner-open-${cl}`, severity: 'info', ruleId: 'INFO_INNER_DRAWER_DOOR', message: `${cl}: iç çekmecenin çıkması için kapak en az 90° açılmalı. Menteşe tarafında duvar ya da komşu dolap varsa 155° menteşe ya da dolgu kullanın.` });
+      const byHeight = new Map<number, typeof inCell>();
+      for (const d of inCell) byHeight.set(d.box.h, [...(byHeight.get(d.box.h) ?? []), d]);
+      for (const [boxH, list] of byHeight) {
+        const n = list.length;
+        const label = `${cl}-${list.map((d) => d.index + 1).join(',')}`;
+        // Menteşe tarafına dolgu (ray takozu); kutu dolgunun yanında, ray payı kadar dar
+        const sp = list[0].spacers;
+        const boxW = r(cell.opening.w - sp.left - sp.right - cab.railWidthDeduction);
+        const sides = (sp.left > 0 ? 1 : 0) + (sp.right > 0 ? 1 : 0);
+        parts.push({ id: `inner-side-${label}`, code: `${cab.code}-ICK${label}-YAN`, name: `İç Çekmece ${label} Yanı`, group: 'drawer', material: 'body', length: innerRail, width: boxH, thickness: t, quantity: 2 * n, bands: topBand, trace: trace('ray boyu × kutu yüksekliği', { innerRail, boxH }, 'RULE_INNER_DRAWER_DEPTH', 'Kutu yanı ray boyundadır; kutu raf arasından 40mm alçak (en fazla 250mm).') });
+        parts.push({ id: `inner-fb-${label}`, code: `${cab.code}-ICK${label}-ONARKA`, name: `İç Çekmece ${label} Ön/Arka`, group: 'drawer', material: 'body', length: r(boxW - 2 * t), width: boxH, thickness: t, quantity: 2 * n, bands: topBand, trace: trace('göz genişliği - dolgu - ray düşümü - 2t', { w: r(cell.opening.w), sol: sp.left, sag: sp.right, t, deduction: cab.railWidthDeduction }, 'RULE_INNER_DRAWER_WIDTH', 'İç çekmece kapağın arkasında kalır; ön yüzü kutunun kendi ön tahtasıdır.') });
+        parts.push({ id: `inner-bottom-${label}`, code: `${cab.code}-ICK${label}-TABAN`, name: `İç Çekmece ${label} Tabanı`, group: 'drawer', material: 'back', length: boxW, width: innerRail, thickness: cab.backThickness, quantity: n, bands: NO_BANDS, trace: trace('kutu genişliği × ray boyu', { boxW, innerRail }, 'RULE_DRAWER_BOTTOM', 'Çekmece tabanı kutunun altına çakılır.') });
+        if (sides > 0 && sp.layers > 0) {
+          const where = sides === 2 ? 'iki yanda' : sp.left > 0 ? 'sol yanda' : 'sağ yanda';
+          parts.push({ id: `inner-spacer-${label}`, code: `${cab.code}-ICK${label}-TAKOZ`, name: `İç Çekmece ${label} Ray Takozu (menteşe tarafı)`, group: 'drawer', material: 'body', length: innerRail, width: INNER_DRAWER.spacerHeight, thickness: t, quantity: sides * sp.layers * n, bands: NO_BANDS, trace: trace('ray boyu × takoz yüksekliği', { innerRail, kat: sp.layers, yer: where }, 'RULE_INNER_DRAWER_SPACER', `Menteşe tarafındaki dikmeye ${sp.layers} kat vidalanır (${where}); kalınlık menteşe kolunun taşması ve açık kapağın içeri girmesine göre seçildi. Ray takozun üstüne bağlanır.`) });
+        }
+        addHw({ key: 'rail', name: `${cab.railType === 'undermount' ? 'Gizli Ray' : 'Bilyalı Ray'} ${innerRail}mm`, unit: 'çift', quantity: n, catalogVerified: false });
+      }
     }
   }
 

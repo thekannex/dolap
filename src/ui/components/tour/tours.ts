@@ -56,7 +56,7 @@ export const TOURS: Partial<Record<PageId, TourStep[]>> = {
     { target: 'composer-list', title: 'Çizimler', text: 'Bu işin çizimleri. Bir işte birden çok çizim olabilir; + ile yenisi eklenir, adı aşağıdan değiştirilir.' },
     { target: 'composer-newbox', title: 'Yeni kutu', text: 'Çizeceğiniz kutunun içeriğini ve derinliğini seçin, sonra çizim alanında boş yerde sürükleyerek kutu çizin.' },
     { target: 'composer-canvas', title: 'Çizim alanı', text: 'Kutuyu sürükleyip taşıyın, kenarlarından boyutlandırın; ara dikme, ara tabla ve rafları da sürükleyin. Tekerlek yakınlaştırır; Delete siler, oklar 10 mm kaydırır.' },
-    { target: 'composer-panel', title: 'Kutu ayarları', text: 'Seçili kutunun rafları, kapakları, çekmeceleri, bölmeleri, ölçüsü ve konumu burada. Kutu seçili değilken hazır şablonlar ve ölçüyle kutu ekleme çıkar.' },
+    { target: 'composer-panel', title: 'Kutu ayarları', text: 'Seçili kutunun rafları, kapakları, çekmeceleri, bölmeleri, ölçüsü ve konumu burada. Kapaklı gözde raf aralarından birini seçerek kapağın arkasına iç çekmece koyabilirsiniz. Kutu seçili değilken hazır şablonlar ve ölçüyle kutu ekleme çıkar.' },
     { target: 'nav-steps', title: 'Ayrıntılar', text: 'Kutuları en ince ayrıntısıyla (gövde, arkalık, bant) ayarlamak için "Dolaplar" adımına geçin.' },
   ],
   editor: [

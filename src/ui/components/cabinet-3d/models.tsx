@@ -100,6 +100,10 @@ export function CabinetModel({ cabinet, showFronts, highlight = false }: { cabin
           {geo.shelves.map((sh) => (
             <Board key={`sh-${sh.col}-${sh.cell}-${sh.index}`} pos={[LX(sh.rect.x + sh.rect.w / 2), (sh.rect.y + sh.rect.h / 2) / S, bt / 2 - 0.1]} size={[sh.rect.w / S, t, D - bt - 0.2]} color={wood} />
           ))}
+          {geo.innerDrawers.map((dr) => (
+            <Board key={`ick-${dr.col}-${dr.cell}-${dr.index}`} pos={[LX(dr.box.x + dr.box.w / 2), (dr.box.y + dr.box.h / 2) / S, bt / 2 - 0.3 - (insetFronts ? t : 0) / 2]}
+              size={[dr.box.w / S, dr.box.h / S, D - bt - 0.6 - (insetFronts ? t : 0)]} color={highlight ? '#f5d0a9' : '#e8d4b4'} />
+          ))}
           {geo.rods.map((r, i) => (
             <mesh key={`grod-${i}`} position={[LX((r.x1 + r.x2) / 2), r.y / S, 0]} rotation={[0, 0, Math.PI / 2]}>
               <cylinderGeometry args={[0.12, 0.12, (r.x2 - r.x1) / S - 0.04, 16]} />

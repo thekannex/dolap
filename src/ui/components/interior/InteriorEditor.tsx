@@ -7,6 +7,7 @@ import {
   resolveInterior, splitColumn, removeColumn, splitCell, removeCell, setColumnWidth, setCellHeight,
   updateCell, setShelfCount, cellLabel, distributeShelves, equalizeColumns, equalizeCells,
   moveColumn, nestColumn, ungroupColumns, equalizeGroup, setGroupWidth,
+  shelfSpaces, setInnerDrawer, innerDrawerBoxHeight, INNER_DRAWER,
 } from '../../../core/engine/interior';
 import type { InteriorFrame } from '../../../core/engine/interior';
 import { formatNumber } from '../../../core/utils/format';
@@ -94,7 +95,7 @@ export default function InteriorEditor({ cabinet, selected, onSelect }: {
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-xs font-semibold w-7">{cellLabel(ci, cj)}</span>
                   <div className="flex-1"><Seg label="Göz içeriği" value={cell.content} options={CONTENTS}
-                    onChange={(v) => apply(updateCell(ci, cj, { content: v, ...(v === 'drawer' ? { shelves: [], rod: false } : {}) }))} /></div>
+                    onChange={(v) => apply(updateCell(ci, cj, { content: v, ...(v === 'drawer' ? { shelves: [], rod: false } : {}), ...(v !== 'door' ? { innerDrawers: [] } : {}) }))} /></div>
                   <Button size="sm" variant="ghost" title="Bu gözü yatay ikiye böl" aria-label="Yatay böl" onClick={(e) => { e.stopPropagation(); apply(splitCell(ci, cj)); }}><Rows2 size={14} /></Button>
                   {col.cells.length > 1 && (
                     <Button size="sm" variant="danger" title="Gözü kaldır" aria-label="Gözü kaldır" onClick={(e) => { e.stopPropagation(); onSelect(null); apply(removeCell(ci, cj)); }}><X size={13} /></Button>
@@ -135,6 +136,40 @@ export default function InteriorEditor({ cabinet, selected, onSelect }: {
                     )}
                   </div>
                 )}
+
+                {cell.content === 'door' && (() => {
+                  const spaces = shelfSpaces(cell.shelves, cell.height, frame.t);
+                  const chosen = new Set(cell.innerDrawers ?? []);
+                  return (
+                    <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+                      <span className="text-[11px] text-[var(--color-text-muted)]">Kapağın içinde çekmece (raf arası, üstten alta)</span>
+                      <div className="flex flex-wrap gap-1">
+                        {spaces.map((sp, k) => ({ sp, k })).reverse().map(({ sp, k }) => {
+                          const on = chosen.has(k);
+                          const fits = innerDrawerBoxHeight(sp.h) >= INNER_DRAWER.minBoxHeight;
+                          return (
+                            <button key={k} aria-pressed={on} disabled={!fits && !on}
+                              title={fits ? `${k + 1}. raf arası: kapağın arkasına çekmece ${on ? 'kaldır' : 'koy'}` : 'Raf arası çekmece için çok alçak'}
+                              onClick={() => apply(setInnerDrawer(ci, cj, k, !on))}
+                              className={`px-2 py-1 rounded-md text-[11px] border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                                on ? 'bg-[var(--color-accent)] text-white border-[var(--color-accent)]'
+                                  : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-accent)]'}`}>
+                              {k + 1}{k === 0 ? ' (alt)' : ''} · <span className="font-mono">{formatNumber(sp.h)}</span>{on ? ' · iç çekmece' : ''}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {cell.shelves.length === 0 && (
+                        <p className="text-[11px] text-[var(--color-text-dim)]">Raf sayısını artırın; her raf arası ayrı seçilir.</p>
+                      )}
+                      {chosen.size > 0 && (
+                        <p className="text-[11px] text-[var(--color-text-dim)]">
+                          Menteşe tarafına dolgu (ray takozu) program tarafından konur; kalınlığı kapak tipine göre ayarlanır ve kesim listesine girer. Dolguya denk gelen menteşe kendiliğinden kaydırılır (yeni yeri Dolaplar adımındaki uyarılarda).
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {cell.content !== 'drawer' && (
                   <div className="flex items-center gap-3 flex-wrap" onClick={(e) => e.stopPropagation()}>

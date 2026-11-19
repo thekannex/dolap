@@ -1,4 +1,5 @@
 import type { IRect, InteriorGeometry } from '../../../core/engine/interior';
+import { INNER_DRAWER } from '../../../core/engine/interior';
 
 export interface CellRef { col: number; cell: number }
 
@@ -66,6 +67,10 @@ export default function InteriorSvg({ geo, X, Y, fs, showFronts = true, selected
         );
       })}
 
+      {!showFronts && geo.innerDrawers.map((d) => (
+        <rect key={`inner-${d.col}-${d.cell}-${d.index}`} {...box(d.box)} fill="#fde68a" fillOpacity={0.5} stroke="#b45309" strokeWidth={fs * 0.06} pointerEvents="none" />
+      ))}
+
       {showFronts && geo.fronts.map((f) => {
         const b = box(f.rect);
         // Kulp: yana açılan kapakta menteşenin karşı kenarı, yukarı açılanda ve çekmecede altta/ortada
@@ -83,6 +88,28 @@ export default function InteriorSvg({ geo, X, Y, fs, showFronts = true, selected
             <circle cx={kx} cy={ky} r={knob} fill="#d4af37" stroke="#a16207" strokeWidth={fs * 0.05} />
             {f.kind === 'door' && f.opening === 'up' && (
               <text x={b.x + b.width / 2} y={b.y + b.height / 2} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fill="#5b4329">↑</text>
+            )}
+          </g>
+        );
+      })}
+
+      {/* Kapağın içindeki çekmeceler: kapak varken kesikli çizgiyle; menteşe tarafında dolgu (ray takozu) */}
+      {geo.innerDrawers.flatMap((d) => [
+        d.spacers.left > 0 && { k: 'l', x: d.space.x, w: d.spacers.left, d },
+        d.spacers.right > 0 && { k: 'r', x: d.space.x + d.space.w - d.spacers.right, w: d.spacers.right, d },
+      ].filter((v): v is { k: string; x: number; w: number; d: typeof d } => Boolean(v))).map(({ k, x, w, d }) => (
+        <rect key={`spacer-${d.col}-${d.cell}-${d.index}-${k}`} {...box({ x, y: d.box.y - INNER_DRAWER.spacerBelowBox, w, h: INNER_DRAWER.spacerHeight })}
+          fill="#a16207" fillOpacity={0.55} stroke="#7c2d12" strokeWidth={fs * 0.05} pointerEvents="none">
+          <title>Ray takozu (menteşe tarafı)</title>
+        </rect>
+      ))}
+      {showFronts && geo.innerDrawers.map((d) => {
+        const b = box(d.box);
+        return (
+          <g key={`inner-${d.col}-${d.cell}-${d.index}`} pointerEvents="none">
+            <rect {...b} fill="none" stroke="#7c2d12" strokeWidth={fs * 0.08} strokeDasharray={`${fs * 0.45},${fs * 0.25}`} />
+            {b.height > fs * 1.4 && b.width > fs * 5 && (
+              <text x={b.x + b.width / 2} y={b.y + b.height / 2} textAnchor="middle" dominantBaseline="middle" fontSize={fs * 0.65} fill="#7c2d12">iç çekmece</text>
             )}
           </g>
         );

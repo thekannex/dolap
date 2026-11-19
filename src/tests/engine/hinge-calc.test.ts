@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  calcHingeCount,
+  calcHingeCount, placeHingesClear,
   calcHingePositions,
   getHingeType,
   checkHingeRailClash,
@@ -166,5 +166,21 @@ describe('hinge-calc', () => {
       expect(r.details[0]).toContain('Menteşe (Y: 630) ile Ray (Y: 630) çakışıyor.');
       expect(r.details[1]).toContain('Menteşe (Y: 93) ile Ray (Y: 95) çakışıyor.');
     });
+  });
+});
+
+describe('menteşeyi iç çekmece takozundan kaçırma', () => {
+  it('çakışan alt menteşe bandın üstüne kayar, diğeri yerinde kalır', () => {
+    // 717 kapak, takoz kapağın altından 23–83 mm'de
+    const r = placeHingesClear(717, 2, [[23, 83]]);
+    expect(r).toEqual({ positions: [113, 627], moved: true, ok: true });
+  });
+
+  it('çakışma yoksa yerler değişmez', () => {
+    expect(placeHingesClear(717, 2, [[250, 310]])).toEqual({ positions: [90, 627], moved: false, ok: true });
+  });
+
+  it('kaydıracak yer yoksa ok false', () => {
+    expect(placeHingesClear(200, 2, [[0, 200]]).ok).toBe(false);
   });
 });

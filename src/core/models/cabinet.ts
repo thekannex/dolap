@@ -80,6 +80,11 @@ export interface InteriorCell {
   shelves: number[];
   shelfType: 'adjustable' | 'fixed';
   rod: boolean;
+  /**
+   * Kapaklı gözde iç çekmece olan raf araları (0 = en alttaki ara, gözün tabanı ile ilk raf arası).
+   * Çekmece kapağın arkasında kalır; menteşeyi geçmek için yanlarına ray takozu konur.
+   */
+  innerDrawers?: number[];
 }
 
 /** Dikey bölme (soldan sağa). */
