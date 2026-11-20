@@ -4,7 +4,7 @@ import {
   splitColumn, removeColumn, splitCell, removeCell, setColumnWidth, setCellHeight, moveDivider, movePartition,
   moveShelf, updateCell, setShelfCount, interiorFromCabinet, cellLabel, cellContentLabel, equalizeColumns, equalizeCells,
   groupColumns, ungroupColumns, setDividerBehind, equalizeColumnSubset, groupRange, moveColumn, nestColumn, columnUnits, setGroupWidth, equalizeGroup,
-  shelfSpaces, setInnerDrawer, innerDrawerSpacers,
+  shelfSpaces, setInnerDrawer, innerDrawerSpacers, innerDrawerSideGap,
 } from '../../core/engine/interior';
 import type { InteriorFrame } from '../../core/engine/interior';
 import { computeCabinet } from '../../core/engine/compute-cabinet';
@@ -395,14 +395,16 @@ describe('kapağın içindeki çekmece', () => {
     expect(shelfSpaces([], 764, 18)).toEqual([{ y: 0, h: 764 }]);
   });
 
-  it('seçilen raf arasında kutu; dolgu yalnız menteşe tarafında', () => {
+  it('seçilen raf arasında kutu; dolgu iki yanda, çekmece yanlardan içeride', () => {
     const g = layoutInterior(oneDoor({ innerDrawers: [0] }), frame());
     expect(g.innerDrawers).toEqual([{
-      col: 0, cell: 0, index: 0, space: { x: 18, y: 18, w: 964, h: 250 }, box: { x: 36, y: 33, w: 946, h: 210 },
-      spacers: { left: 18, right: 0, layers: 1 },
+      col: 0, cell: 0, index: 0, space: { x: 18, y: 18, w: 964, h: 250 }, box: { x: 54, y: 33, w: 892, h: 210 },
+      spacers: { left: 36, right: 36, layers: 2 },
     }]);
-    // Sağ menteşede dolgu sağda
-    expect(layoutInterior(oneDoor({ innerDrawers: [0], hinge: 'right' }), frame()).innerDrawers[0].box).toMatchObject({ x: 18, w: 946 });
+    // Menteşe hangi yanda olursa olsun iki yan da aynı
+    expect(layoutInterior(oneDoor({ innerDrawers: [0], hinge: 'right' }), frame()).innerDrawers[0].box).toMatchObject({ x: 54, w: 892 });
+    // Menteşe kolu dikmeden ~30mm taşar; çekmece 49mm içeride
+    expect(innerDrawerSideGap(g.innerDrawers[0].spacers)).toBe(49);
     // Kapak yine kapak; çekmece önü eklenmez
     expect(g.fronts.every((f) => f.kind === 'door')).toBe(true);
   });
@@ -427,9 +429,9 @@ describe('kapağın içindeki çekmece', () => {
     const byId = (id: string) => r.parts.find((p) => p.id === id);
     expect(byId('inner-side-1A-1')).toMatchObject({ width: 210, quantity: 2 });
     expect(byId('inner-side-1A-2')).toMatchObject({ width: 192, quantity: 2 });
-    expect(byId('inner-fb-1A-1')).toMatchObject({ length: 884.5, quantity: 2 });
-    expect(byId('inner-bottom-1A-1')).toMatchObject({ length: 920.5, quantity: 1 });
-    expect(byId('inner-spacer-1A-1')).toMatchObject({ width: 60, quantity: 1, name: 'İç Çekmece 1A-1 Ray Takozu (menteşe tarafı)' });
+    expect(byId('inner-fb-1A-1')).toMatchObject({ length: 830.5, quantity: 2 });
+    expect(byId('inner-bottom-1A-1')).toMatchObject({ length: 866.5, quantity: 1 });
+    expect(byId('inner-spacer-1A-1')).toMatchObject({ width: 60, quantity: 4, name: 'İç Çekmece 1A-1 Ray Takozu' });
     const rails = r.hardware.filter((h) => h.key === 'rail').reduce((s, h) => s + h.quantity, 0);
     expect(rails).toBe(2);
     expect(r.parts.some((p) => p.id.startsWith('drawer-front'))).toBe(false);
@@ -467,11 +469,13 @@ describe('iç çekmece ile kapak ve menteşe', () => {
 });
 
 describe('iç çekmece dolgusu kendiliğinden', () => {
-  it('bindirme kapakta menteşe tarafına tek kat, gömmede iki kat, çift kapakta iki yana', () => {
-    expect(innerDrawerSpacers({ opening: 'side', doorCount: 1, hinge: 'left' }, { t: 18, inset: false, doorGap: 3 })).toEqual({ left: 18, right: 0, layers: 1 });
-    expect(innerDrawerSpacers({ opening: 'side', doorCount: 1, hinge: 'right' }, { t: 18, inset: true, doorGap: 3 })).toEqual({ left: 0, right: 36, layers: 2 });
-    expect(innerDrawerSpacers({ opening: 'side', doorCount: 2, hinge: 'left' }, { t: 18, inset: false, doorGap: 3 })).toEqual({ left: 18, right: 18, layers: 1 });
-    expect(innerDrawerSpacers({ opening: 'up', doorCount: 1, hinge: 'left' }, { t: 18, inset: false, doorGap: 3 })).toEqual({ left: 0, right: 0, layers: 0 });
+  it('bindirme kapakta iki yana iki kat, gömmede üç kat; yukarı açılanda yok', () => {
+    expect(innerDrawerSpacers({ opening: 'side' }, { t: 18, inset: false, doorGap: 3 })).toEqual({ left: 36, right: 36, layers: 2 });
+    expect(innerDrawerSpacers({ opening: 'side' }, { t: 18, inset: true, doorGap: 3 })).toEqual({ left: 54, right: 54, layers: 3 });
+    expect(innerDrawerSpacers({ opening: 'up' }, { t: 18, inset: false, doorGap: 3 })).toEqual({ left: 0, right: 0, layers: 0 });
+    // Çekmece yan dikmeden: bindirmede 49mm, gömmede 67mm içeride (menteşe kolu ~30mm taşar)
+    expect(innerDrawerSideGap(innerDrawerSpacers({ opening: 'side' }, { t: 18, inset: false, doorGap: 3 }))).toBe(49);
+    expect(innerDrawerSideGap(innerDrawerSpacers({ opening: 'side' }, { t: 18, inset: true, doorGap: 3 }))).toBe(67);
   });
 
   it('yukarı açılan kapakta takoz parçası çıkmaz, kutu gözü doldurur', () => {
@@ -481,9 +485,9 @@ describe('iç çekmece dolgusu kendiliğinden', () => {
     expect(r.parts.find((p) => p.id.startsWith('inner-bottom'))!.length).toBe(538.5); // 564 - 25.4
   });
 
-  it('gömme kapakta dolgu iki kat ve kesim listesinde', () => {
+  it('gömme kapakta dolgu üç kat ve kesim listesinde', () => {
     const r = computeCabinet({ ...DEFAULT_CABINET, type: 'custom', width: 600, height: 720, depth: 560, railWidth: 0, doorOverlayType: 'inset',
       interior: { columns: [newColumn([newCell('door', { shelves: [300], innerDrawers: [1] })])] } });
-    expect(r.parts.find((p) => p.id.startsWith('inner-spacer'))).toMatchObject({ quantity: 2 });
+    expect(r.parts.find((p) => p.id.startsWith('inner-spacer'))).toMatchObject({ quantity: 6 });
   });
 });

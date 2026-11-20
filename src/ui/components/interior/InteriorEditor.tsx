@@ -7,7 +7,7 @@ import {
   resolveInterior, splitColumn, removeColumn, splitCell, removeCell, setColumnWidth, setCellHeight,
   updateCell, setShelfCount, cellLabel, distributeShelves, equalizeColumns, equalizeCells,
   moveColumn, nestColumn, ungroupColumns, equalizeGroup, setGroupWidth,
-  shelfSpaces, setInnerDrawer, innerDrawerBoxHeight, INNER_DRAWER,
+  shelfSpaces, setInnerDrawer, innerDrawerBoxHeight, INNER_DRAWER, innerDrawerSpacers, innerDrawerSideGap,
 } from '../../../core/engine/interior';
 import type { InteriorFrame } from '../../../core/engine/interior';
 import { formatNumber } from '../../../core/utils/format';
@@ -164,7 +164,9 @@ export default function InteriorEditor({ cabinet, selected, onSelect }: {
                       )}
                       {chosen.size > 0 && (
                         <p className="text-[11px] text-[var(--color-text-dim)]">
-                          Menteşe tarafına dolgu (ray takozu) program tarafından konur; kalınlığı kapak tipine göre ayarlanır ve kesim listesine girer. Dolguya denk gelen menteşe kendiliğinden kaydırılır (yeni yeri Dolaplar adımındaki uyarılarda).
+                          {cell.opening === 'up'
+                            ? 'Yukarı açılan kapakta çekmece yan dikmeye ray payı kadar yakın durur; kapak yana açılmadığı için dolgu gerekmez.'
+                            : `İki yana dolgu (ray takozu) program tarafından konur: çekmece yan dikmelerden ${innerDrawerSideGap(innerDrawerSpacers(cell, frame))} mm içeride durur, menteşe kolunu ve açık kapağı geçer. Dolguya denk gelen menteşe kendiliğinden kaydırılır.`}
                         </p>
                       )}
                     </div>

@@ -59,30 +59,36 @@ export const MIN_COLUMN = 80;
 /** İç çekmece: kutu en fazla bu yükseklikte, raf arasından bu kadar alçak; ray için alttan boşluk. */
 export const INNER_DRAWER = {
   maxBoxHeight: 250, clearance: 40, railGap: 15, minBoxHeight: 60, spacerHeight: 60, spacerBelowBox: 10,
-  /** Menteşe kolu ve plakasının yan dikmeden içeri taşması (Ø35 kap menteşe). */
-  hingeProtrusion: 15,
-  /** Bindirme kapağın açıkken gözün içine girmesi; gömme kapakta kapak kalınlığı + derz. */
-  overlayIntrusion: 2,
+  /** Menteşe kolu ve plakasının yan dikmeden içeri taşması (Ø35 kap menteşe, ayar vidalarıyla). */
+  hingeProtrusion: 30,
+  /**
+   * Açık kapağın gözün içine girmesi: bindirme ve yarım bindirmede menteşe ve kapak ölçü sapmasıyla
+   * birlikte 10mm sayılır; gömme kapakta kapak kalınlığı + derz.
+   */
+  overlayIntrusion: 10,
   /** Rayın bir yandaki payı (standart ray düşümünün yarısı) ve güvenlik payı. */
-  railSide: 12.7, margin: 3,
+  railSide: 12.7, margin: 5,
 } as const;
 
-/** İç çekmecenin menteşe tarafındaki dolgu (ray takozu): her yanın kalınlığı ve kaç kat gövde levhası. */
+/** İç çekmecenin yanlarındaki dolgu (ray takozu): her yanın kalınlığı ve kaç kat gövde levhası. */
 export interface InnerDrawerSpacers { left: number; right: number; layers: number }
 
 /**
- * Dolgu yalnız menteşe tarafına (çift kapakta iki yana) konur; kalınlığı menteşe taşması ve açık kapağın
- * içeri girmesi kadar, ray payı düşülerek, gövde kalınlığının katı olarak seçilir. Yukarı açılan kapakta gerekmez.
+ * Dolgu iki yana konur: çekmece hem menteşe kolunu hem açık kapağı yandan geçecek kadar içeride durur.
+ * Kalınlık menteşe taşması + kapağın içeri girmesi + pay kadar, ray payı düşülerek, gövde kalınlığının
+ * katı olarak seçilir. Yukarı açılan kapak yana açılmadığı için dolgu gerekmez.
  */
-export function innerDrawerSpacers(cell: Pick<InteriorCell, 'opening' | 'doorCount' | 'hinge'>, f: Pick<InteriorFrame, 't' | 'inset' | 'doorGap'>): InnerDrawerSpacers {
+export function innerDrawerSpacers(cell: Pick<InteriorCell, 'opening'>, f: Pick<InteriorFrame, 't' | 'inset' | 'doorGap'>): InnerDrawerSpacers {
   if (cell.opening === 'up') return { left: 0, right: 0, layers: 0 };
   const intrusion = f.inset ? f.t + f.doorGap : INNER_DRAWER.overlayIntrusion;
   const need = INNER_DRAWER.hingeProtrusion + intrusion + INNER_DRAWER.margin - INNER_DRAWER.railSide;
   const layers = need <= 0 ? 0 : Math.ceil(need / f.t);
   const th = layers * f.t;
-  const both = cell.doorCount === 2;
-  return { left: both || cell.hinge === 'left' ? th : 0, right: both || cell.hinge === 'right' ? th : 0, layers };
+  return { left: th, right: th, layers };
 }
+
+/** Çekmece kutusunun yan dikmeden uzaklığı (dolgu + ray payı), mm. */
+export const innerDrawerSideGap = (s: Pick<InnerDrawerSpacers, 'left' | 'right'>) => Math.round(Math.min(s.left, s.right) + INNER_DRAWER.railSide);
 export const MIN_CELL = 60;
 
 let idSeq = 0;

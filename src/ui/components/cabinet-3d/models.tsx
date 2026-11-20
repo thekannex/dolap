@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { INNER_DRAWER } from '../../../core/engine/interior';
 import * as THREE from 'three';
 import type { ThreeEvent } from '@react-three/fiber';
 import { Edges } from '@react-three/drei';
@@ -99,6 +100,13 @@ export function CabinetModel({ cabinet, showFronts, highlight = false }: { cabin
           ))}
           {geo.shelves.map((sh) => (
             <Board key={`sh-${sh.col}-${sh.cell}-${sh.index}`} pos={[LX(sh.rect.x + sh.rect.w / 2), (sh.rect.y + sh.rect.h / 2) / S, bt / 2 - 0.1]} size={[sh.rect.w / S, t, D - bt - 0.2]} color={wood} />
+          ))}
+          {geo.innerDrawers.flatMap((dr) => [
+            dr.spacers.left > 0 ? { k: 'l', x: dr.space.x + dr.spacers.left / 2, w: dr.spacers.left, dr } : null,
+            dr.spacers.right > 0 ? { k: 'r', x: dr.space.x + dr.space.w - dr.spacers.right / 2, w: dr.spacers.right, dr } : null,
+          ]).filter((v) => v !== null).map(({ k, x, w, dr }) => (
+            <Board key={`ickt-${dr.col}-${dr.cell}-${dr.index}-${k}`} pos={[LX(x), (dr.box.y - INNER_DRAWER.spacerBelowBox + INNER_DRAWER.spacerHeight / 2) / S, bt / 2 - 0.3 - (insetFronts ? t : 0) / 2]}
+              size={[w / S, INNER_DRAWER.spacerHeight / S, D - bt - 0.6 - (insetFronts ? t : 0)]} color="#a16207" />
           ))}
           {geo.innerDrawers.map((dr) => (
             <Board key={`ick-${dr.col}-${dr.cell}-${dr.index}`} pos={[LX(dr.box.x + dr.box.w / 2), (dr.box.y + dr.box.h / 2) / S, bt / 2 - 0.3 - (insetFronts ? t : 0) / 2]}
